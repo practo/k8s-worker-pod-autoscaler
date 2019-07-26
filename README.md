@@ -8,7 +8,9 @@ kubectl get spa
 
 ## Why build a custom controller ?
 
-Kubernetes Horizontal Pod autoscaler and custom metric scaling kubernetes does not work well when you need to scale based on SQS queue length. Following are the reasons for building a custom controller.
+Kubernetes is a wonderful platform.
+
+Horizontal Pod autoscaler and custom metric scaling kubernetes does not work well when you need to scale based on SQS queue length. Following are the reasons for building a custom controller.
 
 1) The scaling up and down metric for SQS based scaling are different. Scale up of kubernetes deployments can be done based on "ApproximateMessagesVisible" but scaling down to zero cannot be done on that metric. So if the queue is getting consumed very fast the ApproximateMessagesVisible will always be zero, so "NumberOfEmptyReceives" is the right metric to scale things down.
 

@@ -1,6 +1,5 @@
 # The binary to build (just the basename).
 # This can be overwritten from command line using
-# "make BIN=practl all" instead of "make all"
 BIN := sqspodautoscaler
 
 UNIQUE:=$(shell date +%s)
