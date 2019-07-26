@@ -19,7 +19,7 @@ func InitConfig(name string) error {
 		return err
 	}
 
-	cfgDir := filepath.Join(home, ".sqspodautoscaler")
+	cfgDir := filepath.Join(home, ".workerpodautoscaler")
 	if _, statErr := os.Stat(cfgDir); os.IsNotExist(statErr) {
 		// #nosec
 		if mkdirErr := os.Mkdir(cfgDir, 0755); mkdirErr != nil {

@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	k8sv1alpha1 "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/apis/sqspodautoscaler/v1alpha1"
+	k8sv1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

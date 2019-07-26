@@ -77,8 +77,8 @@ git tag $TAG
 
 echo "building release assets"
 make all-container
-cp -f bin/darwin_amd64/sqspodautoscaler bin/sqspodautoscaler_darwin_amd64
-cp -f bin/linux_amd64/sqspodautoscaler bin/sqspodautoscaler_linux_amd64
+cp -f bin/darwin_amd64/workerpodautoscaler bin/workerpodautoscaler_darwin_amd64
+cp -f bin/linux_amd64/workerpodautoscaler bin/workerpodautoscaler_linux_amd64
 
 echo "creating draft release"
 response=$(

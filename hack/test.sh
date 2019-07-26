@@ -16,7 +16,7 @@ go test -v -i -installsuffix "static" ${TARGETS}
 go test -v -installsuffix "static" ${TARGETS}
 echo
 
-# TODO: fix me https://github.com/practo/k8s-sqs-pod-autoscaler-controllers/issues/55
+# TODO: fix me https://github.com/practo/k8s-worker-pod-autoscalers/issues/55
 exit 0
 echo -n "Checking gofmt: "
 ERRS=$(find "$@" -type f -name \*.go | xargs gofmt -l 2>&1 || true)
