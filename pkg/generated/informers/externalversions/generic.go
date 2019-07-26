@@ -21,7 +21,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/apis/sqspodautoscaler/v1alpha1"
+	v1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -53,8 +53,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=k8s.practo.dev, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("sqspodautoscalers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.K8s().V1alpha1().SqsPodAutoScalers().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("workerpodautoscalers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.K8s().V1alpha1().WorkerPodAutoScalers().Informer()}, nil
 
 	}
 

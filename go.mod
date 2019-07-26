@@ -1,4 +1,4 @@
-module github.com/practo/k8s-sqs-pod-autoscaler-controller
+module github.com/practo/k8s-worker-pod-autoscaler
 
 go 1.12
 

@@ -8,7 +8,7 @@ CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${SCRIPT_ROOT}"; ls -d -1 ./vendor/k8s.io/code-
 
 # TODO: this script works when there is a link in GOPATH to point to this repo, make it work without it (go modules)
 bash "${CODEGEN_PKG}/generate-groups.sh" all \
-     github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated \
-     github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/apis \
-     sqspodautoscaler:v1alpha1 \
+     github.com/practo/k8s-worker-pod-autoscaler/pkg/generated \
+     github.com/practo/k8s-worker-pod-autoscaler/pkg/apis \
+     workerpodautoscaler:v1alpha1 \
      --go-header-file "${SCRIPT_ROOT}/hack/boilerplate.go.txt"

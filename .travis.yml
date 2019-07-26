@@ -3,7 +3,7 @@ services:
   - docker
 script:
 - make build
-- test -f bin/linux_amd64/sqspodautoscaler
+- test -f bin/linux_amd64/workerpodautoscaler
 - make all-container
-- docker images | grep "^practodev/sqspodautoscaler.*__linux_amd64"
+- docker images | grep "^practodev/workerpodautoscaler.*__linux_amd64"
 - make test

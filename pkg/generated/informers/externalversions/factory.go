@@ -23,9 +23,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated/clientset/versioned"
-	internalinterfaces "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated/informers/externalversions/internalinterfaces"
-	sqspodautoscaler "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated/informers/externalversions/sqspodautoscaler"
+	versioned "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
+	internalinterfaces "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/internalinterfaces"
+	workerpodautoscaler "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -172,9 +172,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	K8s() sqspodautoscaler.Interface
+	K8s() workerpodautoscaler.Interface
 }
 
-func (f *sharedInformerFactory) K8s() sqspodautoscaler.Interface {
-	return sqspodautoscaler.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) K8s() workerpodautoscaler.Interface {
+	return workerpodautoscaler.New(f, f.namespace, f.tweakListOptions)
 }

@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated/clientset/versioned"
-	k8sv1alpha1 "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated/clientset/versioned/typed/sqspodautoscaler/v1alpha1"
-	fakek8sv1alpha1 "github.com/practo/k8s-sqs-pod-autoscaler-controller/pkg/generated/clientset/versioned/typed/sqspodautoscaler/v1alpha1/fake"
+	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
+	k8sv1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1alpha1"
+	fakek8sv1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
