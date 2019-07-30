@@ -1,0 +1,7 @@
+apiVersion: k8s.practo.dev/v1alpha1
+kind: WorkerPodAutoScaler
+metadata:
+  name: example-wpa
+spec:
+  deploymentName: example-deployment
+  replicas: 1
