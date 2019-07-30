@@ -9,14 +9,15 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 
-	"github.com/spf13/cobra"
-	// "github.com/practo/k8s-worker-pod-autoscaler"
+	"github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/cmdutil"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/signals"
+	"github.com/spf13/cobra"
 
 	workerpodautoscalercontroller "github.com/practo/k8s-worker-pod-autoscaler/pkg/controller"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
 type runCmd struct {
@@ -58,6 +59,16 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	customClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
 		klog.Fatalf("Error building custom clientset: %s", err.Error())
+	}
+
+	apiExtensionClient, err := apiextensionsclient.NewForConfig(cfg)
+	if err != nil {
+		klog.Fatalf("Error creating api extension client: %s", err.Error())
+	}
+
+	err = v1alpha1.CreateCRD(apiExtensionClient)
+	if err != nil {
+		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)

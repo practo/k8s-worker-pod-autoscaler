@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	samplev1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
+	v1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	samplescheme "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler/v1alpha1"
@@ -301,7 +301,7 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *samplev1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
+func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
@@ -371,7 +371,7 @@ func (c *Controller) handleObject(obj interface{}) {
 // newDeployment creates a new Deployment for a WorkerPodAutoScaler resource. It also sets
 // the appropriate OwnerReferences on the resource so handleObject can discover
 // the WorkerPodAutoScaler resource that 'owns' it.
-func newDeployment(workerPodAutoScaler *samplev1alpha1.WorkerPodAutoScaler) *appsv1.Deployment {
+func newDeployment(workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler) *appsv1.Deployment {
 	labels := map[string]string{
 		"app":        "nginx",
 		"controller": workerPodAutoScaler.Name,
@@ -381,7 +381,7 @@ func newDeployment(workerPodAutoScaler *samplev1alpha1.WorkerPodAutoScaler) *app
 			Name:      workerPodAutoScaler.Spec.DeploymentName,
 			Namespace: workerPodAutoScaler.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(workerPodAutoScaler, samplev1alpha1.SchemeGroupVersion.WithKind("WorkerPodAutoScaler")),
+				*metav1.NewControllerRef(workerPodAutoScaler, v1alpha1.SchemeGroupVersion.WithKind("WorkerPodAutoScaler")),
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
