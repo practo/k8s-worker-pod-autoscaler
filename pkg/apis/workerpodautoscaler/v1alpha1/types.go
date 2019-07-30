@@ -18,13 +18,17 @@ type WorkerPodAutoScaler struct {
 
 // WorkerPodAutoScalerSpec is the spec for a WorkerPodAutoScaler resource
 type WorkerPodAutoScalerSpec struct {
+	MinReplicas    *int32 `json:"minReplicas"`
+	MaxReplicas    *int32 `json:"maxReplicas"`
+	QueueURI       string `json:"queueUri"`
 	DeploymentName string `json:"deploymentName"`
 	Replicas       *int32 `json:"replicas"`
 }
 
 // WorkerPodAutoScalerStatus is the status for a WorkerPodAutoScaler resource
 type WorkerPodAutoScalerStatus struct {
-	AvailableReplicas int32 `json:"availableReplicas"`
+	CurrentReplicas int32 `json:"CurrentReplicas"`
+	DesiredReplicas int32 `json:"DesiredReplicas"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
