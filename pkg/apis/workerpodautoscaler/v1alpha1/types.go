@@ -20,7 +20,7 @@ type WorkerPodAutoScaler struct {
 type WorkerPodAutoScalerSpec struct {
 	MinReplicas    *int32 `json:"minReplicas"`
 	MaxReplicas    *int32 `json:"maxReplicas"`
-	QueueURI       string `json:"queueUri"`
+	QueueURI       string `json:"queueURI"`
 	DeploymentName string `json:"deploymentName"`
 	Replicas       *int32 `json:"replicas"`
 }

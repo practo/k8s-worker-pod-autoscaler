@@ -3,5 +3,8 @@ kind: WorkerPodAutoScaler
 metadata:
   name: example-wpa
 spec:
+  minReplicas: 0
+  maxRepliacs: 10
+  queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
   deploymentName: example-deployment
   replicas: 1

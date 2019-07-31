@@ -65,6 +65,10 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
+
+	// QueueList keeps the list of all the queues in memeory
+	// which is used by the core controller and the sqs exporter
+	Queues *Queues
 }
 
 // NewController returns a new sample controller
@@ -72,7 +76,8 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
-	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer) *Controller {
+	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
+	queues *Queues) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -93,6 +98,7 @@ func NewController(
 		workerPodAutoScalersSynced: workerPodAutoScalerInformer.Informer().HasSynced,
 		workqueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "WorkerPodAutoScalers"),
 		recorder:                   recorder,
+		Queues:                     queues,
 	}
 
 	klog.Info("Setting up event handlers")
@@ -102,6 +108,7 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueWorkerPodAutoScaler(new)
 		},
+		DeleteFunc: controller.enqueueWorkerPodAutoScaler,
 	})
 	// Set up an event handler for when Deployment resources change. This
 	// handler will lookup the owner of the given Deployment, and if it is
@@ -234,15 +241,19 @@ func (c *Controller) syncHandler(key string) error {
 	// Get the WorkerPodAutoScaler resource with this namespace/name
 	workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalers(namespace).Get(name)
 	if err != nil {
-		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop
-		// processing.
+		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
 			return nil
 		}
-
 		return err
 	}
+
+	c.Queues.list()
+	c.Queues.add(namespace, workerPodAutoScaler.Spec.QueueURI)
+	c.Queues.list()
+
+	return nil
 
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
 	if deploymentName == "" {
@@ -306,7 +317,7 @@ func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *v1alph
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
-	workerPodAutoScalerCopy.Status.AvailableReplicas = deployment.Status.AvailableReplicas
+	workerPodAutoScalerCopy.Status.CurrentReplicas = deployment.Status.AvailableReplicas
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,

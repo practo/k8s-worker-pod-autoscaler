@@ -71,12 +71,14 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
+	queues := workerpodautoscalercontroller.NewQueues()
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
 
 	controller := workerpodautoscalercontroller.NewController(kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
 		customInformerFactory.K8s().V1alpha1().WorkerPodAutoScalers(),
+		queues,
 	)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
