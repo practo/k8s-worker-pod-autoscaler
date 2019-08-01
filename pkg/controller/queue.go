@@ -1,62 +1,81 @@
 package controller
 
 import (
-	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
-	"sync"
 
 	"k8s.io/klog"
 )
 
 const (
-	QueueProviderSQS       = "sqs"
-	QueueProviderBeanstalk = "beanstalk"
+	QueueProviderSQS                 = "sqs"
+	QueueProviderBeanstalk           = "beanstalk"
+	NotIntitializedQueueMessageCount = -1
 )
 
+// Queues maintains a list of all queues as specified in WPAs in memory
+// The list is kept in sync with the wpa objects
 type Queues struct {
-	mutex sync.Mutex
-
-	item map[string]QueueSpec `json:"queues"`
+	addCh           chan map[string]*QueueSpec
+	deleteCh        chan string
+	updateMessageCh chan map[string]int
+	item            map[string]*QueueSpec `json:"queues"`
 }
 
+// QueueSpec is the specification for a single queue
 type QueueSpec struct {
 	namespace string `json:"namespace"`
 	name      string `json:"name"`
 	protocol  string `json:"protocol"`
 	host      string `json:"host"`
 	provider  string `json:"provider"`
-	messages  int32  `json:"messages"`
+	messages  int    `json:"messages"`
 }
 
-func NewQueues() *Queues {
+func NewQueues(addCh chan map[string]*QueueSpec, deleteCh chan string, updateMessageCh chan map[string]int) *Queues {
 	return &Queues{
-		item: make(map[string]QueueSpec),
+		addCh:           addCh,
+		deleteCh:        deleteCh,
+		updateMessageCh: updateMessageCh,
+		item:            make(map[string]*QueueSpec),
 	}
 }
 
-func (q *Queues) list() {
-	for _, spec := range q.item {
-		klog.Infof("%s/%s", spec.namespace, spec.name)
+func (q *Queues) SyncQueues() {
+	for {
+		select {
+		case queueSpecMap := <-q.addCh:
+			for key, value := range queueSpecMap {
+				if _, ok := q.item[key]; ok {
+					continue
+				}
+				q.item[key] = value
+			}
+		case message := <-q.updateMessageCh:
+			for key, value := range message {
+				if _, ok := q.item[key]; !ok {
+					continue
+				}
+				q.item[key].messages = value
+			}
+		case key := <-q.deleteCh:
+			_, ok := q.item[key]
+			if ok {
+				delete(q.item, key)
+			}
+		}
 	}
 }
 
-// add keeps the in memory Queues updated
-// with the objects present in WPA
-func (q *Queues) add(namespace string, uri string) error {
+func (q *Queues) add(namespace string, name string, uri string) error {
 	if uri == "" {
-		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for namespace: %s", namespace)
+		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
 	}
 
-	name := getQueueName(uri)
 	key := getKey(namespace, name)
-
-	if _, ok := q.item[key]; ok {
-		return nil
-	}
-
+	queueName := getQueueName(uri)
 	protocol, host, err := parseQueueURI(uri)
 	if err != nil {
 		return err
@@ -64,31 +83,26 @@ func (q *Queues) add(namespace string, uri string) error {
 
 	found, provider, err := getProvider(host, protocol)
 	if !found {
-		klog.Warningf("Unsupported queue provider: %s, ignoring queue: %s", provider, name)
+		klog.Warningf("Unsupported queue provider: %s, ignoring wpa: %s", provider, name)
 		return nil
 	}
 
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-
-	q.item[key] = QueueSpec{
+	queueSpec := &QueueSpec{
 		namespace: namespace,
-		name:      name,
+		name:      queueName,
 		protocol:  protocol,
 		host:      host,
 		provider:  provider,
-		messages:  -1, // -1 denotes it has not been synced yet
+		messages:  NotIntitializedQueueMessageCount,
 	}
 
+	q.addCh <- map[string]*QueueSpec{key: queueSpec}
 	return nil
 }
 
-func (q *Queues) getQueueSpec(namespace string, name string) (QueueSpec, error) {
-	key := getKey(namespace, name)
-	if _, ok := q.item[key]; !ok {
-		return QueueSpec{}, fmt.Errorf("Queue: %s not found in namespace %s", name, namespace)
-	}
-	return q.item[key], nil
+func (q *Queues) delete(namespace string, name string) error {
+	q.deleteCh <- getKey(namespace, name)
+	return nil
 }
 
 func parseQueueURI(uri string) (string, string, error) {

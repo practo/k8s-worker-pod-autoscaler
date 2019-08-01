@@ -71,7 +71,12 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
-	queues := workerpodautoscalercontroller.NewQueues()
+	addCh := make(chan map[string]*workerpodautoscalercontroller.QueueSpec)
+	deleteCh := make(chan string)
+	updateMessageCh := make(chan map[string]int)
+	queues := workerpodautoscalercontroller.NewQueues(addCh, deleteCh, updateMessageCh)
+	go queues.SyncQueues()
+
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
 

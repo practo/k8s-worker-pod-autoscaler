@@ -42,7 +42,21 @@ const (
 	// MessageResourceSynced is the message used for an Event fired when a WorkerPodAutoScaler
 	// is synced successfully
 	MessageResourceSynced = "WorkerPodAutoScaler synced successfully"
+
+	// WPAEventAdd stores the add event name
+	WPAEventAdd = "add"
+
+	// WPAEventUpdate stores the add event name
+	WPAEventUpdate = "update"
+
+	// WPAEventDelete stores the add event name
+	WPAEventDelete = "delete"
 )
+
+type WPAEvent struct {
+	key  string
+	name string
+}
 
 // Controller is the controller implementation for WorkerPodAutoScaler resources
 type Controller struct {
@@ -102,13 +116,14 @@ func NewController(
 	}
 
 	klog.Info("Setting up event handlers")
+
 	// Set up an event handler for when WorkerPodAutoScaler resources change
 	workerPodAutoScalerInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueueWorkerPodAutoScaler,
+		AddFunc: controller.enqueueAddWorkerPodAutoScaler,
 		UpdateFunc: func(old, new interface{}) {
-			controller.enqueueWorkerPodAutoScaler(new)
+			controller.enqueueUpdateWorkerPodAutoScaler(new)
 		},
-		DeleteFunc: controller.enqueueWorkerPodAutoScaler,
+		DeleteFunc: controller.enqueueDeleteWorkerPodAutoScaler,
 	})
 	// Set up an event handler for when Deployment resources change. This
 	// handler will lookup the owner of the given Deployment, and if it is
@@ -190,14 +205,15 @@ func (c *Controller) processNextWorkItem() bool {
 		// put back on the workqueue and attempted again after a back-off
 		// period.
 		defer c.workqueue.Done(obj)
-		var key string
 		var ok bool
 		// We expect strings to come off the workqueue. These are of the
 		// form namespace/name. We do this as the delayed nature of the
 		// workqueue means the items in the informer cache may actually be
 		// more up to date that when the item was initially put onto the
-		// workqueue.
-		if key, ok = obj.(string); !ok {
+		// workqueue.(PS: not anymore, its an WPA event)
+
+		event, ok := obj.(WPAEvent)
+		if !ok {
 			// As the item in the workqueue is actually invalid, we call
 			// Forget here else we'd go into a loop of attempting to
 			// process a work item that is invalid.
@@ -207,15 +223,15 @@ func (c *Controller) processNextWorkItem() bool {
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
 		// WorkerPodAutoScaler resource to be synced.
-		if err := c.syncHandler(key); err != nil {
+		if err := c.syncHandler(event); err != nil {
 			// Put the item back on the workqueue to handle any transient errors.
-			c.workqueue.AddRateLimited(key)
-			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+			c.workqueue.AddRateLimited(event)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", event, err.Error())
 		}
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
-		klog.Infof("Successfully synced '%s'", key)
+		klog.Infof("Successfully synced '%s'", event)
 		return nil
 	}(obj)
 
@@ -230,7 +246,8 @@ func (c *Controller) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
 // with the current status of the resource.
-func (c *Controller) syncHandler(key string) error {
+func (c *Controller) syncHandler(event WPAEvent) error {
+	key := event.key
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -244,14 +261,25 @@ func (c *Controller) syncHandler(key string) error {
 		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
+			c.Queues.delete(namespace, name)
 			return nil
 		}
 		return err
 	}
 
-	c.Queues.list()
-	c.Queues.add(namespace, workerPodAutoScaler.Spec.QueueURI)
-	c.Queues.list()
+	switch event.name {
+	case WPAEventAdd:
+		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI)
+	case WPAEventUpdate:
+		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI)
+	case WPAEventDelete:
+		err = c.Queues.delete(namespace, name)
+	}
+
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
+		return err
+	}
 
 	return nil
 
@@ -326,17 +354,38 @@ func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *v1alph
 	return err
 }
 
-// enqueueWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
+// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than WorkerPodAutoScaler.
-func (c *Controller) enqueueWorkerPodAutoScaler(obj interface{}) {
+func (c *Controller) getKeyForWorkerPodAutoScaler(obj interface{}) string {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
 		utilruntime.HandleError(err)
-		return
+		return ""
 	}
-	c.workqueue.Add(key)
+	return key
+}
+
+func (c *Controller) enqueueAddWorkerPodAutoScaler(obj interface{}) {
+	c.workqueue.Add(WPAEvent{
+		key:  c.getKeyForWorkerPodAutoScaler(obj),
+		name: WPAEventAdd,
+	})
+}
+
+func (c *Controller) enqueueUpdateWorkerPodAutoScaler(obj interface{}) {
+	c.workqueue.Add(WPAEvent{
+		key:  c.getKeyForWorkerPodAutoScaler(obj),
+		name: WPAEventUpdate,
+	})
+}
+
+func (c *Controller) enqueueDeleteWorkerPodAutoScaler(obj interface{}) {
+	c.workqueue.Add(WPAEvent{
+		key:  c.getKeyForWorkerPodAutoScaler(obj),
+		name: WPAEventDelete,
+	})
 }
 
 // handleObject will take any resource implementing metav1.Object and attempt
@@ -374,7 +423,7 @@ func (c *Controller) handleObject(obj interface{}) {
 			return
 		}
 
-		c.enqueueWorkerPodAutoScaler(workerPodAutoScaler)
+		c.enqueueAddWorkerPodAutoScaler(workerPodAutoScaler)
 		return
 	}
 }
