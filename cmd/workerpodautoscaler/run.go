@@ -73,7 +73,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 
 	addCh := make(chan map[string]*workerpodautoscalercontroller.QueueSpec)
 	deleteCh := make(chan string)
-	updateMessageCh := make(chan map[string]int)
+	updateMessageCh := make(chan map[string]int32)
 	queues := workerpodautoscalercontroller.NewQueues(addCh, deleteCh, updateMessageCh)
 	go queues.SyncQueues()
 

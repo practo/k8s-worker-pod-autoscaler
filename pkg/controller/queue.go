@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	QueueProviderSQS                 = "sqs"
-	QueueProviderBeanstalk           = "beanstalk"
-	NotIntitializedQueueMessageCount = -1
+	QueueProviderSQS          = "sqs"
+	QueueProviderBeanstalk    = "beanstalk"
+	BenanstalkProtocol        = "beanstalk"
+	UnsyncedQueueMessageCount = -1
 )
 
 // Queues maintains a list of all queues as specified in WPAs in memory
@@ -19,21 +20,26 @@ const (
 type Queues struct {
 	addCh           chan map[string]*QueueSpec
 	deleteCh        chan string
-	updateMessageCh chan map[string]int
+	updateMessageCh chan map[string]int32
 	item            map[string]*QueueSpec `json:"queues"`
 }
 
 // QueueSpec is the specification for a single queue
 type QueueSpec struct {
-	namespace string `json:"namespace"`
 	name      string `json:"name"`
-	protocol  string `json:"protocol"`
+	namespace string `json:"namespace"`
 	host      string `json:"host"`
+	protocol  string `json:"protocol"`
 	provider  string `json:"provider"`
-	messages  int    `json:"messages"`
+	messages  int32  `json:"messages"`
+	consumers int32  `json:"consumers"`
 }
 
-func NewQueues(addCh chan map[string]*QueueSpec, deleteCh chan string, updateMessageCh chan map[string]int) *Queues {
+func NewQueues(
+	addCh chan map[string]*QueueSpec,
+	deleteCh chan string,
+	updateMessageCh chan map[string]int32) *Queues {
+
 	return &Queues{
 		addCh:           addCh,
 		deleteCh:        deleteCh,
@@ -68,7 +74,7 @@ func (q *Queues) SyncQueues() {
 	}
 }
 
-func (q *Queues) add(namespace string, name string, uri string) error {
+func (q *Queues) add(namespace string, name string, uri string, consumers int32) error {
 	if uri == "" {
 		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
@@ -93,7 +99,8 @@ func (q *Queues) add(namespace string, name string, uri string) error {
 		protocol:  protocol,
 		host:      host,
 		provider:  provider,
-		messages:  NotIntitializedQueueMessageCount,
+		messages:  UnsyncedQueueMessageCount,
+		consumers: consumers,
 	}
 
 	q.addCh <- map[string]*QueueSpec{key: queueSpec}
@@ -124,7 +131,7 @@ func getProvider(host string, protocol string) (bool, string, error) {
 		return true, QueueProviderSQS, nil
 	}
 
-	if protocol == "beanstalk" {
+	if protocol == BenanstalkProtocol {
 		return true, QueueProviderBeanstalk, nil
 	}
 

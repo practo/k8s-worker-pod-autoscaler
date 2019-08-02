@@ -267,22 +267,6 @@ func (c *Controller) syncHandler(event WPAEvent) error {
 		return err
 	}
 
-	switch event.name {
-	case WPAEventAdd:
-		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI)
-	case WPAEventUpdate:
-		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI)
-	case WPAEventDelete:
-		err = c.Queues.delete(namespace, name)
-	}
-
-	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
-		return err
-	}
-
-	return nil
-
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
 	if deploymentName == "" {
 		// We choose to absorb the error here as the worker would requeue the
@@ -305,6 +289,31 @@ func (c *Controller) syncHandler(event WPAEvent) error {
 	if err != nil {
 		return err
 	}
+
+	consumers := *deployment.Spec.Replicas
+
+	switch event.name {
+	case WPAEventAdd:
+		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
+	case WPAEventUpdate:
+		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
+	case WPAEventDelete:
+		err = c.Queues.delete(namespace, name)
+	}
+
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
+		return err
+	}
+
+	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
+	// current state of the world
+	err = c.updateWorkerPodAutoScalerStatus(workerPodAutoScaler, deployment)
+	if err != nil {
+		return err
+	}
+
+	return nil
 
 	// If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log
 	// a warning to the event recorder and ret
