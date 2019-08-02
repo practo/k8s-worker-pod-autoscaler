@@ -17,6 +17,7 @@ import (
 	workerpodautoscalercontroller "github.com/practo/k8s-worker-pod-autoscaler/pkg/controller"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions"
+	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
@@ -71,10 +72,10 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
-	addCh := make(chan map[string]*workerpodautoscalercontroller.QueueSpec)
+	addCh := make(chan map[string]*queue.QueueSpec)
 	deleteCh := make(chan string)
 	updateMessageCh := make(chan map[string]int32)
-	queues := workerpodautoscalercontroller.NewQueues(addCh, deleteCh, updateMessageCh)
+	queues := queue.NewQueues(addCh, deleteCh, updateMessageCh)
 	go queues.SyncQueues()
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)

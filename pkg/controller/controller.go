@@ -25,6 +25,7 @@ import (
 	samplescheme "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler/v1alpha1"
 	listers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1alpha1"
+	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
 )
 
 const controllerAgentName = "workerpodautoscaler-controller"
@@ -43,17 +44,17 @@ const (
 	// is synced successfully
 	MessageResourceSynced = "WorkerPodAutoScaler synced successfully"
 
-	// WPAEventAdd stores the add event name
-	WPAEventAdd = "add"
+	// WokerPodAutoScalerEventAdd stores the add event name
+	WokerPodAutoScalerEventAdd = "add"
 
-	// WPAEventUpdate stores the add event name
-	WPAEventUpdate = "update"
+	// WokerPodAutoScalerEventUpdate stores the add event name
+	WokerPodAutoScalerEventUpdate = "update"
 
-	// WPAEventDelete stores the add event name
-	WPAEventDelete = "delete"
+	// WokerPodAutoScalerEventDelete stores the add event name
+	WokerPodAutoScalerEventDelete = "delete"
 )
 
-type WPAEvent struct {
+type WokerPodAutoScalerEvent struct {
 	key  string
 	name string
 }
@@ -82,7 +83,7 @@ type Controller struct {
 
 	// QueueList keeps the list of all the queues in memeory
 	// which is used by the core controller and the sqs exporter
-	Queues *Queues
+	Queues *queue.Queues
 }
 
 // NewController returns a new sample controller
@@ -91,7 +92,7 @@ func NewController(
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
 	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
-	queues *Queues) *Controller {
+	queues *queue.Queues) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -212,7 +213,7 @@ func (c *Controller) processNextWorkItem() bool {
 		// more up to date that when the item was initially put onto the
 		// workqueue.(PS: not anymore, its an WPA event)
 
-		event, ok := obj.(WPAEvent)
+		event, ok := obj.(WokerPodAutoScalerEvent)
 		if !ok {
 			// As the item in the workqueue is actually invalid, we call
 			// Forget here else we'd go into a loop of attempting to
@@ -246,7 +247,7 @@ func (c *Controller) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
 // with the current status of the resource.
-func (c *Controller) syncHandler(event WPAEvent) error {
+func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	key := event.key
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -261,7 +262,7 @@ func (c *Controller) syncHandler(event WPAEvent) error {
 		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
-			c.Queues.delete(namespace, name)
+			c.Queues.Delete(namespace, name)
 			return nil
 		}
 		return err
@@ -293,12 +294,12 @@ func (c *Controller) syncHandler(event WPAEvent) error {
 	consumers := *deployment.Spec.Replicas
 
 	switch event.name {
-	case WPAEventAdd:
-		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
-	case WPAEventUpdate:
-		err = c.Queues.add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
-	case WPAEventDelete:
-		err = c.Queues.delete(namespace, name)
+	case WokerPodAutoScalerEventAdd:
+		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
+	case WokerPodAutoScalerEventUpdate:
+		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
+	case WokerPodAutoScalerEventDelete:
+		err = c.Queues.Delete(namespace, name)
 	}
 
 	if err != nil {
@@ -377,23 +378,23 @@ func (c *Controller) getKeyForWorkerPodAutoScaler(obj interface{}) string {
 }
 
 func (c *Controller) enqueueAddWorkerPodAutoScaler(obj interface{}) {
-	c.workqueue.Add(WPAEvent{
+	c.workqueue.Add(WokerPodAutoScalerEvent{
 		key:  c.getKeyForWorkerPodAutoScaler(obj),
-		name: WPAEventAdd,
+		name: WokerPodAutoScalerEventAdd,
 	})
 }
 
 func (c *Controller) enqueueUpdateWorkerPodAutoScaler(obj interface{}) {
-	c.workqueue.Add(WPAEvent{
+	c.workqueue.Add(WokerPodAutoScalerEvent{
 		key:  c.getKeyForWorkerPodAutoScaler(obj),
-		name: WPAEventUpdate,
+		name: WokerPodAutoScalerEventUpdate,
 	})
 }
 
 func (c *Controller) enqueueDeleteWorkerPodAutoScaler(obj interface{}) {
-	c.workqueue.Add(WPAEvent{
+	c.workqueue.Add(WokerPodAutoScalerEvent{
 		key:  c.getKeyForWorkerPodAutoScaler(obj),
-		name: WPAEventDelete,
+		name: WokerPodAutoScalerEventDelete,
 	})
 }
 

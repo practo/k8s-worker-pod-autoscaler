@@ -1,4 +1,4 @@
-package controller
+package queue
 
 import (
 	"net/url"
@@ -74,7 +74,7 @@ func (q *Queues) SyncQueues() {
 	}
 }
 
-func (q *Queues) add(namespace string, name string, uri string, consumers int32) error {
+func (q *Queues) Add(namespace string, name string, uri string, consumers int32) error {
 	if uri == "" {
 		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
@@ -107,7 +107,7 @@ func (q *Queues) add(namespace string, name string, uri string, consumers int32)
 	return nil
 }
 
-func (q *Queues) delete(namespace string, name string) error {
+func (q *Queues) Delete(namespace string, name string) error {
 	q.deleteCh <- getKey(namespace, name)
 	return nil
 }
