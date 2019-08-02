@@ -78,6 +78,12 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	queues := queue.NewQueues(addCh, deleteCh, updateMessageCh)
 	go queues.SyncQueues()
 
+	sqsPoller, err := queue.NewSQSPoller("ap-south-1")
+	if err != nil {
+		klog.Fatalf("Error creating sqs Poller: %v", err)
+	}
+	go sqsPoller.Run()
+
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
 
