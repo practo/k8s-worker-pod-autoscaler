@@ -3,6 +3,7 @@ module github.com/practo/k8s-worker-pod-autoscaler
 go 1.12
 
 require (
+	github.com/aws/aws-sdk-go v1.21.8
 	github.com/kisielk/errcheck v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/spf13/cobra v0.0.5
