@@ -20,6 +20,7 @@ const (
 type Queues struct {
 	addCh           chan map[string]*QueueSpec
 	deleteCh        chan string
+	listCh          chan map[string]*QueueSpec
 	updateMessageCh chan map[string]int32
 	item            map[string]*QueueSpec `json:"queues"`
 }
@@ -43,12 +44,23 @@ func NewQueues(
 	return &Queues{
 		addCh:           addCh,
 		deleteCh:        deleteCh,
+		listCh:          make(chan map[string]*QueueSpec),
 		updateMessageCh: updateMessageCh,
 		item:            make(map[string]*QueueSpec),
 	}
 }
 
-func (q *Queues) SyncQueues() {
+func (q *Queues) List() map[string]*QueueSpec {
+	return <-q.listCh
+}
+
+func (q *Queues) SyncLister() {
+	for {
+		q.listCh <- q.item
+	}
+}
+
+func (q *Queues) Sync() {
 	for {
 		select {
 		case queueSpecMap := <-q.addCh:

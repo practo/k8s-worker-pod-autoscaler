@@ -75,10 +75,14 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	addCh := make(chan map[string]*queue.QueueSpec)
 	deleteCh := make(chan string)
 	updateMessageCh := make(chan map[string]int32)
-	queues := queue.NewQueues(addCh, deleteCh, updateMessageCh)
-	go queues.SyncQueues()
+	queues := queue.NewQueues(
+		addCh,
+		deleteCh,
+		updateMessageCh)
+	go queues.Sync()
+	go queues.SyncLister()
 
-	sqsPoller, err := queue.NewSQSPoller("ap-south-1")
+	sqsPoller, err := queue.NewSQSPoller("ap-south-1", queues)
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}
