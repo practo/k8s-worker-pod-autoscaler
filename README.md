@@ -1,40 +1,51 @@
-# Kubernetes Worker Pod Autoscaler [WPA]
+# Worker Pod Autoscaler
+Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length in AWS SQS or Beanstalk tubes.
 
-Scale kubernetes deployments based on AWS SQS queue length and beanstalk queues. Scaling based on other queues is also possible, but integration work with this controller is required for them(future releases).
+Currently AWS SQS and Beanstalk are supported.
 
+# Install the WorkerPodAutoscaler
+
+### Install
+Running the below script will create the WPA CRD and start the controller. The controller watches over all the specified queues in AWS and beanstalk and scales the Kubernetes deployments based on the specification.
+
+```bash
+export AWS_ACCESS_KEY_ID='sample-aws-access-key-id'
+export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
+./hack/install.sh
 ```
+
+### Verify Installation
+Check the wpa resource is accessible using kubectl
+
+```bash
 kubectl get wpa
 ```
 
-## What do you mean by worker?
-Worker are jobs or long running processes or pods which watches over a queue to do the job. Worker could be a Kubernetes Deployment or a Kubernetes Job(not supported, at present).
+# Example
+Please install following above before trying the below example.
 
-## Why build a custom controller ?
-
-Kubernetes is a wonderful platform. But it does not solve all the use case, this is the reason CRDs exist.
-
-Horizontal Pod autoscaler and custom metric scaling kubernetes does not work well when you need to scale based on SQS queue length. Following are the reasons for building a custom controller.
-
-1) The scaling up and down metric for queue based scaling are different and depends on the queue service provider. For example in SQS, scale up of kubernetes deployments can be done based on "ApproximateMessagesVisible" but scaling down to zero cannot be done on that metric. So if the queue is getting consumed very fast the ApproximateMessagesVisible will always be zero, so "NumberOfEmptyReceives" is the right metric to scale things down.
-
-2) Using HPA and custom metrics requires exporting custom metric from various sources and making it available for scaling. So if your use case is queue based scaling this controller can help you
-
-If you run this controller in your cluster, there is no need to write custom cloudwatch or AWS SQS exporters and make it work with the kubernetes HPA. Run this controller with correct AWS access permissions and you can start scaling your worker deployments based on queue length.
-
-## Good things
-
-1) **OnDemand Kubernetes Deployments/ Server-less workers, min=0:** Make your kubernetes deployments on-demand using `min=0` with *minimum effort*.
-
-2) **Speed:** For AWS Users, since this works on SQS metric, there is no lag in scaling. If you use cloudwatch metric for SQS then there is a 10minute lag since it takes 10minutes for SQS metrics to reflect on Cloudwatch.
-
-## How to use it?
-
-1) Run the controller (this creates the CRD if not present and starts the controller)
-```
-kubectl create -f hack/workerpodautoscaler-controller.yaml
+- Create Deployment that needs to scale based on queue length.
+```bash
+kubectl create -f artificats/example-deployment.yaml
 ```
 
-2) Create the Worker Pod Autoscaler custom resource defination speciying your scale up and down configuration.
+- Create `WPA object (example-wpa)` that will scale the `example-deployment` based on SQS queue length.
+```bash
+kubectl create -f artifacts/example-wpa.yaml
 ```
-kubectl create -f hack/wpa.yaml
-```
+
+This will start scaling `example-deployment` based on SQS queue length.
+
+# Why?
+
+Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. Before making this we were using HPA to scale our worker pods. Below are the reasons for moving away from HPA and making a custom resource:
+
+**TLDR;** Don't want to write and maintain custom metric exporters? Use WPA to quickly start scaling your pods based on queue length with minimum effort (few kubectl commands and you are done !)
+
+1. **No need to write and maintain custom metric exporters**: In case of HPA with custom metrics, the users need to write and maintain the custom metric exporters. This makes sense for HPA to support all kinds of use cases. WPA comes with queue metric exporters integrated and can be put into use with few kubectl commands.
+
+2. **Different Metrics for Scaling Up and Down**: Scaling up and down metric can be different based on the use case. For example in our case we want to scale up based on SQS `ApproximateMessageVisible` length and scale down based on `NumberOfEmptyReceive`. This is because if the worker jobs watching the queue is consuming the queue very fast, `ApproximateMessageVisible` would always be zero and you don't want to scale down to 0 in such cases.
+
+3. **Fast**: The scaling should happen as soon as the queue metric changes. It makes use of Golang concurrency model using go-routines and channels to make this as close to real time as possible.
+
+4. **Ondemand workers:** min=0 is support (its also supported in HPA now)
