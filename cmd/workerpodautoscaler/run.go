@@ -72,13 +72,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
-	addCh := make(chan map[string]*queue.QueueSpec)
-	deleteCh := make(chan string)
-	updateMessageCh := make(chan map[string]int32)
-	queues := queue.NewQueues(
-		addCh,
-		deleteCh,
-		updateMessageCh)
+	queues := queue.NewQueues()
 	go queues.Sync()
 	go queues.SyncLister()
 

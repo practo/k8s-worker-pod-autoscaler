@@ -36,16 +36,12 @@ type QueueSpec struct {
 	consumers int32  `json:"consumers"`
 }
 
-func NewQueues(
-	addCh chan map[string]*QueueSpec,
-	deleteCh chan string,
-	updateMessageCh chan map[string]int32) *Queues {
-
+func NewQueues() *Queues {
 	return &Queues{
-		addCh:           addCh,
-		deleteCh:        deleteCh,
+		addCh:           make(chan map[string]*QueueSpec),
+		deleteCh:        make(chan string),
 		listCh:          make(chan map[string]*QueueSpec),
-		updateMessageCh: updateMessageCh,
+		updateMessageCh: make(chan map[string]int32),
 		item:            make(map[string]*QueueSpec),
 	}
 }
@@ -65,9 +61,6 @@ func (q *Queues) Sync() {
 		select {
 		case queueSpecMap := <-q.addCh:
 			for key, value := range queueSpecMap {
-				if _, ok := q.item[key]; ok {
-					continue
-				}
 				q.item[key] = value
 			}
 		case message := <-q.updateMessageCh:
