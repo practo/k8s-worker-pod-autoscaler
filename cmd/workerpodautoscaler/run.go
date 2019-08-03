@@ -74,7 +74,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 
 	queues := queue.NewQueues()
 	go queues.Sync()
-	go queues.SyncLister()
+	go queues.ListSync()
 
 	sqsPoller, err := queue.NewSQSPoller("ap-south-1", queues)
 	if err != nil {

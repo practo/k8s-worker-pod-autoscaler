@@ -27,13 +27,14 @@ type Queues struct {
 
 // QueueSpec is the specification for a single queue
 type QueueSpec struct {
-	name      string `json:"name"`
-	namespace string `json:"namespace"`
-	host      string `json:"host"`
-	protocol  string `json:"protocol"`
-	provider  string `json:"provider"`
-	messages  int32  `json:"messages"`
-	consumers int32  `json:"consumers"`
+	name          string `json:"name"`
+	namespace     string `json:"namespace"`
+	host          string `json:"host"`
+	protocol      string `json:"protocol"`
+	provider      string `json:"provider"`
+	messages      int32  `json:"messages"`
+	idleConsumers bool   `json:"idleConsumers"`
+	consumers     int32  `json:"consumers"`
 }
 
 func NewQueues() *Queues {
@@ -50,7 +51,7 @@ func (q *Queues) List() map[string]*QueueSpec {
 	return <-q.listCh
 }
 
-func (q *Queues) SyncLister() {
+func (q *Queues) ListSync() {
 	for {
 		q.listCh <- q.item
 	}
@@ -99,13 +100,14 @@ func (q *Queues) Add(namespace string, name string, uri string, consumers int32)
 	}
 
 	queueSpec := &QueueSpec{
-		namespace: namespace,
-		name:      queueName,
-		protocol:  protocol,
-		host:      host,
-		provider:  provider,
-		messages:  UnsyncedQueueMessageCount,
-		consumers: consumers,
+		namespace:     namespace,
+		name:          queueName,
+		protocol:      protocol,
+		host:          host,
+		provider:      provider,
+		messages:      UnsyncedQueueMessageCount,
+		consumers:     consumers,
+		idleConsumers: false,
 	}
 
 	q.addCh <- map[string]*QueueSpec{key: queueSpec}
