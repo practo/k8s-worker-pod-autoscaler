@@ -29,6 +29,7 @@ type Queues struct {
 type QueueSpec struct {
 	name          string `json:"name"`
 	namespace     string `json:"namespace"`
+	uri           string `json:"uri"`
 	host          string `json:"host"`
 	protocol      string `json:"protocol"`
 	provider      string `json:"provider"`
@@ -55,6 +56,10 @@ func (q *Queues) ListSync() {
 	for {
 		q.listCh <- q.item
 	}
+}
+
+func (q *Queues) updateMessage(key string, count int32) {
+	q.updateMessageCh <- map[string]int32{key: count}
 }
 
 func (q *Queues) Sync() {
@@ -100,8 +105,9 @@ func (q *Queues) Add(namespace string, name string, uri string, consumers int32)
 	}
 
 	queueSpec := &QueueSpec{
-		namespace:     namespace,
 		name:          queueName,
+		namespace:     namespace,
+		uri:           uri,
 		protocol:      protocol,
 		host:          host,
 		provider:      provider,

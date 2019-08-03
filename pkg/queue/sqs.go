@@ -1,11 +1,19 @@
 package queue
 
 import (
+	"fmt"
+	"strconv"
 	"time"
+
+	"k8s.io/klog"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+)
+
+const (
+	ShortPollSleepSeconds = 30 * time.Second
 )
 
 type SQSPoller struct {
@@ -33,11 +41,15 @@ func NewSQSPoller(awsRegion string, queues *Queues) (Poller, error) {
 }
 
 func (s *SQSPoller) enablePoll(key string) {
-	s.updatePollingCh <- map[string]bool{key: true}
+	s.updatePollingCh <- map[string]bool{
+		key: true,
+	}
 }
 
 func (s *SQSPoller) disablePoll(key string) {
-	s.updatePollingCh <- map[string]bool{key: false}
+	s.updatePollingCh <- map[string]bool{
+		key: false,
+	}
 }
 
 func (s *SQSPoller) isPolling(key string) bool {
@@ -68,6 +80,47 @@ func (s *SQSPoller) updater() {
 	}
 }
 
+func (s *SQSPoller) longPollReceiveMessage(queueURI string) (int32, error) {
+	result, err := s.client.ReceiveMessage(&sqs.ReceiveMessageInput{
+		QueueUrl: aws.String(queueURI),
+		AttributeNames: aws.StringSlice([]string{
+			"SentTimestamp",
+		}),
+		VisibilityTimeout:   aws.Int64(0),
+		MaxNumberOfMessages: aws.Int64(10),
+		MessageAttributeNames: aws.StringSlice([]string{
+			"All",
+		}),
+		WaitTimeSeconds: aws.Int64(20),
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return int32(len(result.Messages)), nil
+}
+
+func (s *SQSPoller) getApproxMessagesVisibleInQueue(queueURI string) (int32, error) {
+	result, err := s.client.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+		QueueUrl:       &queueURI,
+		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
+	})
+	if err != nil {
+		return 0, err
+	}
+	messages, ok := result.Attributes["ApproximateNumberOfMessages"]
+	if !ok {
+		return 0, fmt.Errorf("ApproximateNumberOfMessages not found: %+v",
+			result.Attributes)
+	}
+	i64, err := strconv.ParseInt(*messages, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int32(i64), nil
+}
+
 func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 	if s.isPolling(key) {
 		return
@@ -75,17 +128,46 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 	s.disablePoll(key)
 
 	if queueSpec.consumers == 0 {
-		// do a long poll and on receiving the message increment the messages by 1
-		// this should trigger a single scale up eventually
-		// and return with delay
+		// If there are no consumers running we do a long poll to find a job(s)
+		// in the queue. On finding job(s) we increment the queue message
+		// by no of messages received to trigger scale up.
+		// Long polling is done to keep SQS api calls to minimum.
+		messagesReceived, err := s.longPollReceiveMessage(queueSpec.uri)
+		if err != nil {
+			klog.Errorf("Unable to receive message from queue %q, %v.",
+				queueSpec.name, err)
+			s.enablePoll(key)
+			return
+		}
+
+		if messagesReceived > 0 {
+			s.queues.updateMessage(key, messagesReceived)
+		}
+
+		s.enablePoll(key)
+		return
 	}
 
-	// get the queue length
+	// If the number of consumers are not zero then we should make the target scaling
+	// happen based on what exactly the queue length is.
+	// For this we will need ApproximateMessageVisible
+	approxMessagesVisible, err := s.getApproxMessagesVisibleInQueue(queueSpec.uri)
+	if err != nil {
+		klog.Errorf("Unable to get approximate messages visible in queue %q, %v.",
+			queueSpec.name, err)
+		s.enablePoll(key)
+		return
+	}
 
-	// if message > 0 then set the message length and return with delay
+	if approxMessagesVisible == 0 {
+		// TODO: add NumberOfEmptyReceive
+		time.Sleep(ShortPollSleepSeconds)
+		s.enablePoll(key)
+		return
+	}
 
-	// if message == 0 and NumberOfEmptyReceive > some value then set idleConsumers true return with delay
-
+	s.queues.updateMessage(key, approxMessagesVisible)
+	time.Sleep(ShortPollSleepSeconds)
 	s.enablePoll(key)
 }
 
@@ -98,6 +180,7 @@ func (s *SQSPoller) Run() {
 		for key, queueSpec := range queues {
 			go s.poll(key, queueSpec)
 		}
+		// TODO: use tickers
 		time.Sleep(time.Second * 2)
 	}
 }
