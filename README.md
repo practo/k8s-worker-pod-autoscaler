@@ -37,7 +37,7 @@ kubectl create -f artifacts/example-wpa.yaml
 
 This will start scaling `example-deployment` based on SQS queue length.
 
-# Why?
+# Why make a separate autoscaler CRD ?
 
 Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. Before making this we were using HPA to scale our worker pods. Below are the reasons for moving away from HPA and making a custom resource:
 
@@ -45,8 +45,8 @@ Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. B
 
 1. **No need to write and maintain custom metric exporters**: In case of HPA with custom metrics, the users need to write and maintain the custom metric exporters. This makes sense for HPA to support all kinds of use cases. WPA comes with queue metric exporters integrated and can be put into use with few kubectl commands.
 
-2. **Different Metrics for Scaling Up and Down**: Scaling up and down metric can be different based on the use case. For example in our case we want to scale up based on SQS `ApproximateMessageVisible` length and scale down based on `NumberOfEmptyReceive`. This is because if the worker jobs watching the queue is consuming the queue very fast, `ApproximateMessageVisible` would always be zero and you don't want to scale down to 0 in such cases.
+2. **Different Metrics for Scaling Up and Down**: Scaling up and down metric can be different based on the use case. For example in our case we want to scale up based on SQS `ApproximateNumberOfMessages` length and scale down based on `NumberOfEmptyReceives`. This is because if the worker jobs watching the queue is consuming the queue very fast, `ApproximateNumberOfMessages` would always be zero and you don't want to scale down to 0 in such cases.
 
-3. **Fast**: We wanted to achieve super fast scaling. As soon as a job comes in queue the containers should scale. AWS SQS has a near real time sync. The concurrency, speed and interval of sync can be configured by the user to keep the API calls to minimum.
+3. **Fast Scaling**: We wanted to achieve super fast near real time scaling. As soon as a job comes in queue the containers should scale if needed. The concurrency, speed and interval of sync have been made configurable to keep the API calls to minimum.
 
-4. **Ondemand workers:** min=0 is support (its also supported in HPA now)
+4. **On-demand Workers:** min=0 is support (its also supported in HPA now)

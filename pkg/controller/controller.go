@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -311,58 +312,106 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return nil
 	}
 
-	klog.Infof("queue: %s, messages: %d, idle: %t", queueName, queueMessages, idleWorkers)
+	desiredWorkers := c.getDesiredWorkers(
+		deployment.Status.AvailableReplicas,
+		queueMessages,
+		idleWorkers,
+		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
+		*workerPodAutoScaler.Spec.MinReplicas,
+		*workerPodAutoScaler.Spec.MaxReplicas,
+	)
+	klog.Infof("queue: %s, messages: %d, idle: %t, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(workerPodAutoScaler, deployment)
-	if err != nil {
-		return err
-	}
-
-	return nil
-	// delete below
-
-	// If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log
-	// a warning to the event recorder and ret
-	if !metav1.IsControlledBy(deployment, workerPodAutoScaler) {
-		msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
-		c.recorder.Event(workerPodAutoScaler, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return fmt.Errorf(msg)
-	}
-
-	// If this number of the replicas on the WorkerPodAutoScaler resource is specified, and the
-	// number does not equal the current desired replicas on the Deployment, we
-	// should update the Deployment resource.
-	if workerPodAutoScaler.Spec.Replicas != nil && *workerPodAutoScaler.Spec.Replicas != *deployment.Spec.Replicas {
-		klog.V(4).Infof("WorkerPodAutoScaler %s replicas: %d, deployment replicas: %d", name, *workerPodAutoScaler.Spec.Replicas, *deployment.Spec.Replicas)
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(newDeployment(workerPodAutoScaler))
-	}
-
-	// If an error occurs during Update, we'll requeue the item so we can
-	// attempt processing again later. THis could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		return err
-	}
-
-	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
-	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(workerPodAutoScaler, deployment)
+	err = c.updateWorkerPodAutoScalerStatus(desiredWorkers, workerPodAutoScaler, deployment)
 	if err != nil {
 		return err
 	}
 
 	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+
+	return nil
+	// delete below
+
+	// // If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log
+	// // a warning to the event recorder and ret
+	// if !metav1.IsControlledBy(deployment, workerPodAutoScaler) {
+	// 	msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
+	// 	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeWarning, ErrResourceExists, msg)
+	// 	return fmt.Errorf(msg)
+	// }
+	//
+	// // If this number of the replicas on the WorkerPodAutoScaler resource is specified, and the
+	// // number does not equal the current desired replicas on the Deployment, we
+	// // should update the Deployment resource.
+	// if workerPodAutoScaler.Spec.Replicas != nil && *workerPodAutoScaler.Spec.Replicas != *deployment.Spec.Replicas {
+	// 	klog.V(4).Infof("WorkerPodAutoScaler %s replicas: %d, deployment replicas: %d", name, *workerPodAutoScaler.Spec.Replicas, *deployment.Spec.Replicas)
+	// 	deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(newDeployment(workerPodAutoScaler))
+	// }
+	//
+	// // If an error occurs during Update, we'll requeue the item so we can
+	// // attempt processing again later. THis could have been caused by a
+	// // temporary network failure, or any other transient reason.
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// // Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
+	// // current state of the world
+	// err = c.updateWorkerPodAutoScalerStatus(workerPodAutoScaler, deployment)
+	// if err != nil {
+	// 	return err
+	// }
+
 	return nil
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
+func (c *Controller) getDesiredWorkers(
+	currentWorkers int32,
+	queueMessages int32,
+	idleWorkers bool,
+	targetMessagesPerWorker int32,
+	minWorkers int32,
+	maxWorkers int32) int32 {
+
+	if idleWorkers == true && queueMessages == 0 {
+		return min(minWorkers, 0)
+	}
+
+	if idleWorkers == true && currentWorkers > 0 {
+		return min(minWorkers, currentWorkers-1)
+	}
+
+	if queueMessages > 0 {
+		couldBeDesired := int32(float64(currentWorkers) + math.Ceil(float64(queueMessages/targetMessagesPerWorker)))
+		return max(maxWorkers, couldBeDesired)
+	}
+
+	return currentWorkers
+}
+
+func min(a, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
 	workerPodAutoScalerCopy.Status.CurrentReplicas = deployment.Status.AvailableReplicas
+	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
