@@ -8,7 +8,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
@@ -127,27 +126,6 @@ func NewController(
 		},
 		DeleteFunc: controller.enqueueDeleteWorkerPodAutoScaler,
 	})
-	// Set up an event handler for when Deployment resources change. This
-	// handler will lookup the owner of the given Deployment, and if it is
-	// owned by a WorkerPodAutoScaler resource will enqueue that WorkerPodAutoScaler resource for
-	// processing. This way, we don't need to implement custom logic for
-	// handling Deployment resources. More info on this pattern:
-	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
-	deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newDepl := new.(*appsv1.Deployment)
-			oldDepl := old.(*appsv1.Deployment)
-			if newDepl.ResourceVersion == oldDepl.ResourceVersion {
-				// Periodic resync will send update events for all known Deployments.
-				// Two different versions of the same Deployment will always have different RVs.
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-
 	return controller
 }
 
@@ -314,10 +292,10 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	}
 
 	desiredWorkers := c.getDesiredWorkers(
-		deployment.Status.AvailableReplicas,
 		queueMessages,
-		idleWorkers,
 		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
+		deployment.Status.AvailableReplicas,
+		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
 	)
@@ -340,78 +318,48 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	return nil
 	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
-
-	// delete below
-
-	// // If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log
-	// // a warning to the event recorder and ret
-	// if !metav1.IsControlledBy(deployment, workerPodAutoScaler) {
-	// 	msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
-	// 	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeWarning, ErrResourceExists, msg)
-	// 	return fmt.Errorf(msg)
-	// }
-	//
-	// // If this number of the replicas on the WorkerPodAutoScaler resource is specified, and the
-	// // number does not equal the current desired replicas on the Deployment, we
-	// // should update the Deployment resource.
-	// if workerPodAutoScaler.Spec.Replicas != nil && *workerPodAutoScaler.Spec.Replicas != *deployment.Spec.Replicas {
-	// 	klog.V(4).Infof("WorkerPodAutoScaler %s replicas: %d, deployment replicas: %d", name, *workerPodAutoScaler.Spec.Replicas, *deployment.Spec.Replicas)
-	// 	deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(newDeployment(workerPodAutoScaler))
-	// }
-	//
-	// // If an error occurs during Update, we'll requeue the item so we can
-	// // attempt processing again later. THis could have been caused by a
-	// // temporary network failure, or any other transient reason.
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// // Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
-	// // current state of the world
-	// err = c.updateWorkerPodAutoScalerStatus(workerPodAutoScaler, deployment)
-	// if err != nil {
-	// 	return err
-	// }
-
 	return nil
 }
 
+// getDesiredWorkers finds the desired number of workers which are required
+// example: https://play.golang.org/p/Dzl-23o37fL
 func (c *Controller) getDesiredWorkers(
-	currentWorkers int32,
 	queueMessages int32,
-	idleWorkers bool,
 	targetMessagesPerWorker int32,
+	currentWorkers int32,
+	idleWorkers bool,
 	minWorkers int32,
 	maxWorkers int32) int32 {
 
-	if idleWorkers == true && queueMessages == 0 {
-		return min(minWorkers, 0)
+	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
+
+	if currentWorkers == 0 {
+		if idleWorkers == true {
+			return currentWorkers
+		}
+		desiredWorkers := int32(math.Ceil(usageRatio))
+		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
 
-	if idleWorkers == true && currentWorkers > 0 {
-		return min(minWorkers, currentWorkers-1)
+	if idleWorkers == true {
+		if queueMessages == 0 {
+			return keepInRange(minWorkers, maxWorkers, 0)
+		}
+		return keepInRange(minWorkers, maxWorkers, currentWorkers-1)
 	}
 
-	if queueMessages > 0 {
-		couldBeDesired := int32(float64(currentWorkers) + math.Ceil(float64(queueMessages/targetMessagesPerWorker)))
-		return max(maxWorkers, couldBeDesired)
-	}
-
-	return currentWorkers
+	desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
+	return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 }
 
-func min(a, b int32) int32 {
-	if a < b {
-		return a
+func keepInRange(min int32, max int32, desired int32) int32 {
+	if desired > max {
+		return max
 	}
-	return b
-}
-
-func max(a, b int32) int32 {
-	if a > b {
-		return a
+	if desired < min {
+		return min
 	}
-	return b
+	return desired
 }
 
 func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
@@ -461,82 +409,4 @@ func (c *Controller) enqueueDeleteWorkerPodAutoScaler(obj interface{}) {
 		key:  c.getKeyForWorkerPodAutoScaler(obj),
 		name: WokerPodAutoScalerEventDelete,
 	})
-}
-
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the WorkerPodAutoScaler resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that WorkerPodAutoScaler resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *Controller) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		// If this object is not owned by a WorkerPodAutoScaler, we should not do anything more
-		// with it.
-		if ownerRef.Kind != "WorkerPodAutoScaler" {
-			return
-		}
-
-		workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalers(object.GetNamespace()).Get(ownerRef.Name)
-		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of workerPodAutoScaler '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
-		}
-
-		c.enqueueAddWorkerPodAutoScaler(workerPodAutoScaler)
-		return
-	}
-}
-
-// newDeployment creates a new Deployment for a WorkerPodAutoScaler resource. It also sets
-// the appropriate OwnerReferences on the resource so handleObject can discover
-// the WorkerPodAutoScaler resource that 'owns' it.
-func newDeployment(workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler) *appsv1.Deployment {
-	labels := map[string]string{
-		"app":        "nginx",
-		"controller": workerPodAutoScaler.Name,
-	}
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workerPodAutoScaler.Spec.DeploymentName,
-			Namespace: workerPodAutoScaler.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(workerPodAutoScaler, v1alpha1.SchemeGroupVersion.WithKind("WorkerPodAutoScaler")),
-			},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: workerPodAutoScaler.Spec.Replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx:latest",
-						},
-					},
-				},
-			},
-		},
-	}
 }

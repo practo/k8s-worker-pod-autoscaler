@@ -164,6 +164,7 @@ func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (float64, error) {
 		return 0.0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
 	}
 
+	klog.Infof("%#v", result.MetricDataResults[0])
 	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
 		return *result.MetricDataResults[0].Values[0], nil
 	}
@@ -216,6 +217,7 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 	// TODO: make this api call to execute only after 5minutes for every queue
 	// as it gets updated after only 5minutes (keep a cache)
 	emptyReceives, err := s.numberOfEmptyReceives(queueSpec.uri)
+	klog.Infof("numberOfEmptyReceives", emptyReceives)
 	if err != nil {
 		klog.Errorf("Unable to fetch empty revieve metric for queue %q, %v.",
 			queueSpec.name, err)
