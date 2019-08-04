@@ -282,7 +282,8 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	deployment, err := c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Create(newDeployment(workerPodAutoScaler))
+		return fmt.Errorf("Deployment %s not found in namespace %s",
+			deploymentName, workerPodAutoScaler.Namespace)
 	}
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
@@ -322,6 +323,14 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	)
 	klog.Infof("queue: %s, messages: %d, idle: %t, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
+	if desiredWorkers != *deployment.Spec.Replicas {
+		deployment.Spec.Replicas = &desiredWorkers
+		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deployment)
+		if err != nil {
+			klog.Fatalf("Failed to update deployment: %v", err)
+		}
+	}
+
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
 	err = c.updateWorkerPodAutoScalerStatus(desiredWorkers, workerPodAutoScaler, deployment)
@@ -329,9 +338,9 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
+	return nil
 	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 
-	return nil
 	// delete below
 
 	// // If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log

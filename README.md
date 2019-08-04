@@ -2,7 +2,7 @@
 
 Scale kubernetes pods based on the Queue length of a queue in a Message Queueing Service. Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length.
 
-Currently the supported Message Queueing service are AWS SQS and Beanstalk.
+Currently the supported Message Queueing Services are AWS SQS and Beanstalk.
 
 # Install the WorkerPodAutoscaler
 
@@ -49,4 +49,4 @@ Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. B
 
 3. **Fast Scaling**: We wanted to achieve super fast near real time scaling. As soon as a job comes in queue the containers should scale if needed. The concurrency, speed and interval of sync have been made configurable to keep the API calls to minimum.
 
-4. **On-demand Workers:** min=0 is support (its also supported in HPA now)
+4. **On-demand Workers:** min=0 is supported. It's also supported in HPA [PR](https://github.com/kubernetes/kubernetes/pull/74526])
