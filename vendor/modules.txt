@@ -1,6 +1,7 @@
 # github.com/aws/aws-sdk-go v1.21.8
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/session
+github.com/aws/aws-sdk-go/service/cloudwatch
 github.com/aws/aws-sdk-go/service/sqs
 github.com/aws/aws-sdk-go/aws/awserr
 github.com/aws/aws-sdk-go/aws/credentials
