@@ -22,20 +22,21 @@ type Queues struct {
 	deleteCh        chan string
 	listCh          chan map[string]*QueueSpec
 	updateMessageCh chan map[string]int32
+	idleWorkerCh    chan map[string]bool
 	item            map[string]*QueueSpec `json:"queues"`
 }
 
 // QueueSpec is the specification for a single queue
 type QueueSpec struct {
-	name          string `json:"name"`
-	namespace     string `json:"namespace"`
-	uri           string `json:"uri"`
-	host          string `json:"host"`
-	protocol      string `json:"protocol"`
-	provider      string `json:"provider"`
-	messages      int32  `json:"messages"`
-	idleConsumers bool   `json:"idleConsumers"`
-	consumers     int32  `json:"consumers"`
+	name        string `json:"name"`
+	namespace   string `json:"namespace"`
+	uri         string `json:"uri"`
+	host        string `json:"host"`
+	protocol    string `json:"protocol"`
+	provider    string `json:"provider"`
+	messages    int32  `json:"messages"`
+	idleWorkers bool   `json:"idleWorkers"`
+	workers     int32  `json:"workers"`
 }
 
 func NewQueues() *Queues {
@@ -44,6 +45,7 @@ func NewQueues() *Queues {
 		deleteCh:        make(chan string),
 		listCh:          make(chan map[string]*QueueSpec),
 		updateMessageCh: make(chan map[string]int32),
+		idleWorkerCh:    make(chan map[string]bool),
 		item:            make(map[string]*QueueSpec),
 	}
 }
@@ -59,7 +61,20 @@ func (q *Queues) ListSync() {
 }
 
 func (q *Queues) updateMessage(key string, count int32) {
-	q.updateMessageCh <- map[string]int32{key: count}
+	q.updateMessageCh <- map[string]int32{
+		key: count,
+	}
+	// We assume that if queue is not empty
+	// then workers are not idle
+	if count != 0 {
+		q.updateIdleWorkerStatus(key, false)
+	}
+}
+
+func (q *Queues) updateIdleWorkerStatus(key string, status bool) {
+	q.idleWorkerCh <- map[string]bool{
+		key: status,
+	}
 }
 
 func (q *Queues) Sync() {
@@ -76,6 +91,13 @@ func (q *Queues) Sync() {
 				}
 				q.item[key].messages = value
 			}
+		case idleStatus := <-q.idleWorkerCh:
+			for key, value := range idleStatus {
+				if _, ok := q.item[key]; !ok {
+					continue
+				}
+				q.item[key].idleWorkers = value
+			}
 		case key := <-q.deleteCh:
 			_, ok := q.item[key]
 			if ok {
@@ -85,7 +107,7 @@ func (q *Queues) Sync() {
 	}
 }
 
-func (q *Queues) Add(namespace string, name string, uri string, consumers int32) error {
+func (q *Queues) Add(namespace string, name string, uri string, workers int32) error {
 	if uri == "" {
 		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
@@ -105,15 +127,15 @@ func (q *Queues) Add(namespace string, name string, uri string, consumers int32)
 	}
 
 	queueSpec := &QueueSpec{
-		name:          queueName,
-		namespace:     namespace,
-		uri:           uri,
-		protocol:      protocol,
-		host:          host,
-		provider:      provider,
-		messages:      UnsyncedQueueMessageCount,
-		consumers:     consumers,
-		idleConsumers: false,
+		name:        queueName,
+		namespace:   namespace,
+		uri:         uri,
+		protocol:    protocol,
+		host:        host,
+		provider:    provider,
+		messages:    UnsyncedQueueMessageCount,
+		workers:     workers,
+		idleWorkers: false,
 	}
 
 	q.addCh <- map[string]*QueueSpec{key: queueSpec}

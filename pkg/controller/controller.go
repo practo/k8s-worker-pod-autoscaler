@@ -291,13 +291,13 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
-	consumers := *deployment.Spec.Replicas
+	workers := *deployment.Spec.Replicas
 
 	switch event.name {
 	case WokerPodAutoScalerEventAdd:
-		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
+		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
 	case WokerPodAutoScalerEventUpdate:
-		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, consumers)
+		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
 	case WokerPodAutoScalerEventDelete:
 		err = c.Queues.Delete(namespace, name)
 	}

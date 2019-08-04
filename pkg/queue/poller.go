@@ -4,8 +4,8 @@ type Poller interface {
 	Run()
 	lister()
 	updater()
-	enablePoll(key string)
-	disablePoll(key string)
+	setPolling(key string)
+	unsetPolling(key string)
 	isPolling(key string) bool
 	poll(key string, queueSpec *QueueSpec)
 }

@@ -2,6 +2,7 @@ package queue
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"time"
 
@@ -9,15 +10,18 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
 const (
-	ShortPollSleepSeconds = 30 * time.Second
+	EmptyReceiveThreshold = 0
+	ShortPollInterval     = 30 * time.Second
 )
 
 type SQSPoller struct {
-	client          *sqs.SQS
+	sqsClient       *sqs.SQS
+	cwClient        *cloudwatch.CloudWatch
 	queues          *Queues
 	polling         map[string]bool
 	listPollingCh   chan map[string]bool
@@ -32,7 +36,8 @@ func NewSQSPoller(awsRegion string, queues *Queues) (Poller, error) {
 		return nil, err
 	}
 	return &SQSPoller{
-		client:          sqs.New(sess),
+		sqsClient:       sqs.New(sess),
+		cwClient:        cloudwatch.New(sess),
 		queues:          queues,
 		polling:         make(map[string]bool),
 		listPollingCh:   make(chan map[string]bool),
@@ -40,13 +45,13 @@ func NewSQSPoller(awsRegion string, queues *Queues) (Poller, error) {
 	}, nil
 }
 
-func (s *SQSPoller) enablePoll(key string) {
+func (s *SQSPoller) setPolling(key string) {
 	s.updatePollingCh <- map[string]bool{
 		key: true,
 	}
 }
 
-func (s *SQSPoller) disablePoll(key string) {
+func (s *SQSPoller) unsetPolling(key string) {
 	s.updatePollingCh <- map[string]bool{
 		key: false,
 	}
@@ -71,9 +76,6 @@ func (s *SQSPoller) updater() {
 		select {
 		case status := <-s.updatePollingCh:
 			for key, value := range status {
-				if _, ok := s.polling[key]; !ok {
-					continue
-				}
 				s.polling[key] = value
 			}
 		}
@@ -81,7 +83,7 @@ func (s *SQSPoller) updater() {
 }
 
 func (s *SQSPoller) longPollReceiveMessage(queueURI string) (int32, error) {
-	result, err := s.client.ReceiveMessage(&sqs.ReceiveMessageInput{
+	result, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueURI),
 		AttributeNames: aws.StringSlice([]string{
 			"SentTimestamp",
@@ -102,7 +104,7 @@ func (s *SQSPoller) longPollReceiveMessage(queueURI string) (int32, error) {
 }
 
 func (s *SQSPoller) getApproxMessagesVisibleInQueue(queueURI string) (int32, error) {
-	result, err := s.client.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	result, err := s.sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
 	})
@@ -121,14 +123,64 @@ func (s *SQSPoller) getApproxMessagesVisibleInQueue(queueURI string) (int32, err
 	return int32(i64), nil
 }
 
+func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (int32, error) {
+	period := int64(60)
+	endTime := time.Now()
+	duration, err := time.ParseDuration("-5m")
+	if err != nil {
+		return 0, err
+	}
+	startTime := endTime.Add(duration)
+
+	query := &cloudwatch.MetricDataQuery{
+		Id: aws.String("id1"),
+		MetricStat: &cloudwatch.MetricStat{
+			Metric: &cloudwatch.Metric{
+				Namespace:  aws.String("AWS/SQS"),
+				MetricName: aws.String("NumberOfEmptyReceives"),
+				Dimensions: []*cloudwatch.Dimension{
+					&cloudwatch.Dimension{
+						Name:  aws.String("QueueName"),
+						Value: aws.String(path.Base(queueURI)),
+					},
+				},
+			},
+			Period: &period,
+			Stat:   aws.String("Average"),
+		},
+	}
+
+	result, err := s.cwClient.GetMetricData(&cloudwatch.GetMetricDataInput{
+		EndTime:           &endTime,
+		StartTime:         &startTime,
+		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	if len(result.MetricDataResults) > 1 {
+		return 0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
+	}
+
+	klog.Infof("emprtyreceive=%v %v", result.MetricDataResults[0], queueURI)
+
+	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
+		return int32(*result.MetricDataResults[0].Values[0]), nil
+	}
+	klog.Errorf("NumberOfEmptyReceives API returned empty result for uri: %q", queueURI)
+	return 0, nil
+}
+
 func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 	if s.isPolling(key) {
 		return
 	}
-	s.disablePoll(key)
+	s.setPolling(key)
+	defer s.unsetPolling(key)
 
-	if queueSpec.consumers == 0 {
-		// If there are no consumers running we do a long poll to find a job(s)
+	if queueSpec.workers == 0 {
+		// If there are no workers running we do a long poll to find a job(s)
 		// in the queue. On finding job(s) we increment the queue message
 		// by no of messages received to trigger scale up.
 		// Long polling is done to keep SQS api calls to minimum.
@@ -136,39 +188,46 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 		if err != nil {
 			klog.Errorf("Unable to receive message from queue %q, %v.",
 				queueSpec.name, err)
-			s.enablePoll(key)
 			return
 		}
 
 		if messagesReceived > 0 {
 			s.queues.updateMessage(key, messagesReceived)
 		}
-
-		s.enablePoll(key)
 		return
 	}
 
-	// If the number of consumers are not zero then we should make the target scaling
-	// happen based on what exactly the queue length is.
+	// If the number of workers are not zero then we should make the target scaling
+	// happen based on what exactly the queue length is. The desired number of
+	// consmers should be calculated based on how high the value of queue length is.
 	// For this we will need ApproximateMessageVisible
 	approxMessagesVisible, err := s.getApproxMessagesVisibleInQueue(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to get approximate messages visible in queue %q, %v.",
 			queueSpec.name, err)
-		s.enablePoll(key)
-		return
-	}
-
-	if approxMessagesVisible == 0 {
-		// TODO: add NumberOfEmptyReceive
-		time.Sleep(ShortPollSleepSeconds)
-		s.enablePoll(key)
 		return
 	}
 
 	s.queues.updateMessage(key, approxMessagesVisible)
-	time.Sleep(ShortPollSleepSeconds)
-	s.enablePoll(key)
+	if approxMessagesVisible != 0 {
+		time.Sleep(ShortPollInterval)
+		return
+	}
+
+	// TODO: make this api call to execute only after 5minutes for every queue
+	// as it gets updated after only 5minutes (keep a cache)
+	emptyReceives, err := s.numberOfEmptyReceives(queueSpec.uri)
+	if err != nil {
+		klog.Errorf("Unable to fetch empty revieve metric for queue %q, %v.",
+			queueSpec.name, err)
+		return
+	}
+
+	if emptyReceives > EmptyReceiveThreshold {
+		s.queues.updateIdleWorkerStatus(key, true)
+	}
+	time.Sleep(ShortPollInterval)
+	return
 }
 
 func (s *SQSPoller) Run() {
