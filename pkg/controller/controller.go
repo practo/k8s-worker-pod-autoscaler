@@ -301,11 +301,17 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	case WokerPodAutoScalerEventDelete:
 		err = c.Queues.Delete(namespace, name)
 	}
-
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
 		return err
 	}
+
+	queueName, queueMessages, idleWorkers := c.Queues.GetQueueInfo(namespace, name)
+	if queueName == "" {
+		return nil
+	}
+
+	klog.Infof("queue: %s, messages: %d, idle: %t", queueName, queueMessages, idleWorkers)
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
@@ -315,6 +321,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	}
 
 	return nil
+	// delete below
 
 	// If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log
 	// a warning to the event recorder and ret

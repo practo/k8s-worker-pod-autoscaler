@@ -82,8 +82,9 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	}
 	go sqsPoller.Run()
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
+	// Note: 10 here signifies every 10 seconds the update event will trigger
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*10)
+	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*10)
 
 	controller := workerpodautoscalercontroller.NewController(kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
@@ -96,7 +97,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 
-	if err = controller.Run(2, stopCh); err != nil {
+	// TODO: autoscale the worker threads based on number of queues registred in WPA
+	if err = controller.Run(30, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 	return

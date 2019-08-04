@@ -1,12 +1,13 @@
 # Worker Pod Autoscaler
-Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length in AWS SQS or Beanstalk tubes.
 
-Currently AWS SQS and Beanstalk are supported.
+Scale kubernetes pods based on the Queue length of a queue in a Message Queueing Service. Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length.
+
+Currently the supported Message Queueing service are AWS SQS and Beanstalk.
 
 # Install the WorkerPodAutoscaler
 
 ### Install
-Running the below script will create the WPA CRD and start the controller. The controller watches over all the specified queues in AWS and beanstalk and scales the Kubernetes deployments based on the specification.
+Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and start the controller. The controller watches over all the specified queues in AWS SQS and beanstalk and scales the Kubernetes deployments based on the specification.
 
 ```bash
 export AWS_ACCESS_KEY_ID='sample-aws-access-key-id'
@@ -46,6 +47,6 @@ Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. B
 
 2. **Different Metrics for Scaling Up and Down**: Scaling up and down metric can be different based on the use case. For example in our case we want to scale up based on SQS `ApproximateMessageVisible` length and scale down based on `NumberOfEmptyReceive`. This is because if the worker jobs watching the queue is consuming the queue very fast, `ApproximateMessageVisible` would always be zero and you don't want to scale down to 0 in such cases.
 
-3. **Fast**: The scaling should happen as soon as the queue metric changes. It makes use of Golang concurrency model using go-routines and channels to make this as close to real time as possible.
+3. **Fast**: We wanted to achieve super fast scaling. As soon as a job comes in queue the containers should scale. AWS SQS has a near real time sync. The concurrency, speed and interval of sync can be configured by the user to keep the API calls to minimum.
 
 4. **Ondemand workers:** min=0 is support (its also supported in HPA now)

@@ -16,7 +16,8 @@ import (
 
 const (
 	EmptyReceiveThreshold = 0.0
-	ShortPollInterval     = 30 * time.Second
+	LongPollInterval      = 20
+	ShortPollInterval     = 500 * time.Millisecond
 )
 
 type SQSPoller struct {
@@ -93,7 +94,7 @@ func (s *SQSPoller) longPollReceiveMessage(queueURI string) (int32, error) {
 		MessageAttributeNames: aws.StringSlice([]string{
 			"All",
 		}),
-		WaitTimeSeconds: aws.Int64(20),
+		WaitTimeSeconds: aws.Int64(LongPollInterval),
 	})
 
 	if err != nil {

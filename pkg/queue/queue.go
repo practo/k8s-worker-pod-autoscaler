@@ -54,6 +54,24 @@ func (q *Queues) List() map[string]*QueueSpec {
 	return <-q.listCh
 }
 
+func (q *Queues) listQueueSpec(namespace string, name string) *QueueSpec {
+	key := getKey(namespace, name)
+	item := q.List()
+	if _, ok := item[key]; !ok {
+		return nil
+	}
+	return item[key]
+}
+
+func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, bool) {
+	spec := q.listQueueSpec(namespace, name)
+	if spec == nil {
+		return "", 0, false
+	}
+
+	return spec.name, spec.messages, spec.idleWorkers
+}
+
 func (q *Queues) ListSync() {
 	for {
 		q.listCh <- q.item
@@ -108,6 +126,7 @@ func (q *Queues) Sync() {
 }
 
 func (q *Queues) Add(namespace string, name string, uri string, workers int32) error {
+
 	if uri == "" {
 		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
@@ -126,6 +145,12 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 		return nil
 	}
 
+	messages := int32(UnsyncedQueueMessageCount)
+	spec := q.listQueueSpec(namespace, name)
+	if spec != nil {
+		messages = spec.messages
+	}
+
 	queueSpec := &QueueSpec{
 		name:        queueName,
 		namespace:   namespace,
@@ -133,7 +158,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 		protocol:    protocol,
 		host:        host,
 		provider:    provider,
-		messages:    UnsyncedQueueMessageCount,
+		messages:    messages,
 		workers:     workers,
 		idleWorkers: false,
 	}
@@ -156,6 +181,8 @@ func parseQueueURI(uri string) (string, string, error) {
 	return parsedURI.Scheme, parsedURI.Host, nil
 }
 
+// getProvider returns the provider name
+// TODO: add validation for the queue provider in the wpa custom resource
 func getProvider(host string, protocol string) (bool, string, error) {
 	matched, err := regexp.MatchString("^sqs.[a-z][a-z]-[a-z]*-[0-9]{1}.amazonaws.com", host)
 	if err != nil {
