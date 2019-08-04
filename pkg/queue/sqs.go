@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	EmptyReceiveThreshold = 0
+	EmptyReceiveThreshold = 0.0
 	ShortPollInterval     = 30 * time.Second
 )
 
@@ -123,12 +123,12 @@ func (s *SQSPoller) getApproxMessagesVisibleInQueue(queueURI string) (int32, err
 	return int32(i64), nil
 }
 
-func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (int32, error) {
+func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (float64, error) {
 	period := int64(60)
 	endTime := time.Now()
 	duration, err := time.ParseDuration("-5m")
 	if err != nil {
-		return 0, err
+		return 0.0, err
 	}
 	startTime := endTime.Add(duration)
 
@@ -156,20 +156,18 @@ func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (int32, error) {
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
 	})
 	if err != nil {
-		return 0, err
+		return 0.0, err
 	}
 
 	if len(result.MetricDataResults) > 1 {
-		return 0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
+		return 0.0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
 	}
-
-	klog.Infof("emprtyreceive=%v %v", result.MetricDataResults[0], queueURI)
 
 	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
-		return int32(*result.MetricDataResults[0].Values[0]), nil
+		return *result.MetricDataResults[0].Values[0], nil
 	}
 	klog.Errorf("NumberOfEmptyReceives API returned empty result for uri: %q", queueURI)
-	return 0, nil
+	return 0.0, nil
 }
 
 func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
