@@ -15,9 +15,8 @@ import (
 )
 
 const (
-	EmptyReceiveThreshold = 0.0
-	LongPollInterval      = 20
-	ShortPollInterval     = 500 * time.Millisecond
+	LongPollInterval  = 20
+	ShortPollInterval = 500 * time.Millisecond
 )
 
 type SQSPoller struct {
@@ -177,6 +176,9 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 		return
 	}
 	s.setPolling(key)
+	if s.isPolling(key) {
+		return
+	}
 	defer s.unsetPolling(key)
 
 	if queueSpec.workers == 0 {
@@ -224,9 +226,9 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 		return
 	}
 
-	if emptyReceives > EmptyReceiveThreshold {
-		s.queues.updateIdleWorkerStatus(key, true)
-	}
+	idleWorkers := int32(emptyReceives * float64(queueSpec.workers))
+	s.queues.updateIdleWorkers(key, idleWorkers)
+
 	time.Sleep(ShortPollInterval)
 	return
 }

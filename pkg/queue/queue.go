@@ -22,7 +22,7 @@ type Queues struct {
 	deleteCh        chan string
 	listCh          chan map[string]*QueueSpec
 	updateMessageCh chan map[string]int32
-	idleWorkerCh    chan map[string]bool
+	idleWorkerCh    chan map[string]int32
 	item            map[string]*QueueSpec `json:"queues"`
 }
 
@@ -35,7 +35,7 @@ type QueueSpec struct {
 	protocol    string `json:"protocol"`
 	provider    string `json:"provider"`
 	messages    int32  `json:"messages"`
-	idleWorkers bool   `json:"idleWorkers"`
+	idleWorkers int32  `json:"idleWorkers"`
 	workers     int32  `json:"workers"`
 }
 
@@ -45,7 +45,7 @@ func NewQueues() *Queues {
 		deleteCh:        make(chan string),
 		listCh:          make(chan map[string]*QueueSpec),
 		updateMessageCh: make(chan map[string]int32),
-		idleWorkerCh:    make(chan map[string]bool),
+		idleWorkerCh:    make(chan map[string]int32),
 		item:            make(map[string]*QueueSpec),
 	}
 }
@@ -63,10 +63,10 @@ func (q *Queues) listQueueSpec(namespace string, name string) *QueueSpec {
 	return item[key]
 }
 
-func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, bool) {
+func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, int32) {
 	spec := q.listQueueSpec(namespace, name)
 	if spec == nil {
-		return "", 0, false
+		return "", 0, 0
 	}
 
 	return spec.name, spec.messages, spec.idleWorkers
@@ -82,16 +82,16 @@ func (q *Queues) updateMessage(key string, count int32) {
 	q.updateMessageCh <- map[string]int32{
 		key: count,
 	}
-	// We assume that if queue is not empty
-	// then workers are not idle
+	// We assume if the queue length is not zero
+	// then there are no idle workers
 	if count != 0 {
-		q.updateIdleWorkerStatus(key, false)
+		q.updateIdleWorkers(key, int32(0))
 	}
 }
 
-func (q *Queues) updateIdleWorkerStatus(key string, status bool) {
-	q.idleWorkerCh <- map[string]bool{
-		key: status,
+func (q *Queues) updateIdleWorkers(key string, idleWorkers int32) {
+	q.idleWorkerCh <- map[string]int32{
+		key: idleWorkers,
 	}
 }
 
@@ -160,7 +160,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 		provider:    provider,
 		messages:    messages,
 		workers:     workers,
-		idleWorkers: false,
+		idleWorkers: 0,
 	}
 
 	q.addCh <- map[string]*QueueSpec{key: queueSpec}

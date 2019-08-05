@@ -299,7 +299,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
 	)
-	klog.Infof("queue: %s, messages: %d, idle: %t, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
+	klog.Infof("queue: %s, messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
 		deployment.Spec.Replicas = &desiredWorkers
@@ -316,8 +316,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
-	return nil
-	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
@@ -327,25 +326,26 @@ func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
 	currentWorkers int32,
-	idleWorkers bool,
+	idleWorkers int32,
 	minWorkers int32,
 	maxWorkers int32) int32 {
 
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
 
 	if currentWorkers == 0 {
-		if idleWorkers == true {
+		if idleWorkers != 0 {
 			return currentWorkers
 		}
 		desiredWorkers := int32(math.Ceil(usageRatio))
 		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
 
-	if idleWorkers == true {
+	if idleWorkers != 0 {
 		if queueMessages == 0 {
 			return keepInRange(minWorkers, maxWorkers, 0)
 		}
-		return keepInRange(minWorkers, maxWorkers, currentWorkers-1)
+		desiredWorkers := currentWorkers - idleWorkers
+		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
 
 	desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
