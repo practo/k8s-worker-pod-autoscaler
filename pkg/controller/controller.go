@@ -321,7 +321,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 }
 
 // getDesiredWorkers finds the desired number of workers which are required
-// example: https://play.golang.org/p/Dzl-23o37fL
+// example: https://play.golang.org/p/NoHFKZvkBZu
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
