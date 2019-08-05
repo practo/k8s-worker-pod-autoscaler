@@ -348,7 +348,7 @@ func (c *Controller) getDesiredWorkers(
 		return keepInRange(minWorkers, maxWorkers, currentWorkers-1)
 	}
 
-	desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
+	desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
 	return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 }
 
