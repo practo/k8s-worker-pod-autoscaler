@@ -19,70 +19,31 @@ const (
 	ShortPollInterval = 500 * time.Millisecond
 )
 
-type SQSPoller struct {
-	sqsClient       *sqs.SQS
-	cwClient        *cloudwatch.CloudWatch
-	queues          *Queues
-	polling         map[string]bool
-	listPollingCh   chan map[string]bool
-	updatePollingCh chan map[string]bool
+// SQS is used to by the Poller to get the queue
+// information from AWS SQS, it implements the QueuingService interface
+type SQS struct {
+	queues    *Queues
+	sqsClient *sqs.SQS
+	cwClient  *cloudwatch.CloudWatch
 }
 
-func NewSQSPoller(awsRegion string, queues *Queues) (Poller, error) {
+func NewSQS(awsRegion string, queues *Queues) (QueuingService, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(awsRegion)},
 	)
+
 	if err != nil {
 		return nil, err
 	}
-	return &SQSPoller{
-		sqsClient:       sqs.New(sess),
-		cwClient:        cloudwatch.New(sess),
-		queues:          queues,
-		polling:         make(map[string]bool),
-		listPollingCh:   make(chan map[string]bool),
-		updatePollingCh: make(chan map[string]bool),
+
+	return &SQS{
+		queues:    queues,
+		sqsClient: sqs.New(sess),
+		cwClient:  cloudwatch.New(sess),
 	}, nil
 }
 
-func (s *SQSPoller) setPolling(key string) {
-	s.updatePollingCh <- map[string]bool{
-		key: true,
-	}
-}
-
-func (s *SQSPoller) unsetPolling(key string) {
-	s.updatePollingCh <- map[string]bool{
-		key: false,
-	}
-}
-
-func (s *SQSPoller) isPolling(key string) bool {
-	polling := <-s.listPollingCh
-	if _, ok := polling[key]; !ok {
-		return false
-	}
-	return polling[key]
-}
-
-func (s *SQSPoller) lister() {
-	for {
-		s.listPollingCh <- s.polling
-	}
-}
-
-func (s *SQSPoller) updater() {
-	for {
-		select {
-		case status := <-s.updatePollingCh:
-			for key, value := range status {
-				s.polling[key] = value
-			}
-		}
-	}
-}
-
-func (s *SQSPoller) longPollReceiveMessage(queueURI string) (int32, error) {
+func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 	result, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueURI),
 		AttributeNames: aws.StringSlice([]string{
@@ -103,30 +64,35 @@ func (s *SQSPoller) longPollReceiveMessage(queueURI string) (int32, error) {
 	return int32(len(result.Messages)), nil
 }
 
-func (s *SQSPoller) getApproxMessagesVisibleInQueue(queueURI string) (int32, error) {
+func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 	result, err := s.sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
 	})
+
 	if err != nil {
 		return 0, err
 	}
+
 	messages, ok := result.Attributes["ApproximateNumberOfMessages"]
 	if !ok {
 		return 0, fmt.Errorf("ApproximateNumberOfMessages not found: %+v",
 			result.Attributes)
 	}
+
 	i64, err := strconv.ParseInt(*messages, 10, 32)
 	if err != nil {
 		return 0, err
 	}
+
 	return int32(i64), nil
 }
 
-func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (float64, error) {
+func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 	period := int64(60)
 	endTime := time.Now()
 	duration, err := time.ParseDuration("-5m")
+
 	if err != nil {
 		return 0.0, err
 	}
@@ -155,6 +121,7 @@ func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (float64, error) {
 		StartTime:         &startTime,
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
 	})
+
 	if err != nil {
 		return 0.0, err
 	}
@@ -163,24 +130,16 @@ func (s *SQSPoller) numberOfEmptyReceives(queueURI string) (float64, error) {
 		return 0.0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
 	}
 
-	klog.Infof("%#v", result.MetricDataResults[0])
 	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
 		return *result.MetricDataResults[0].Values[0], nil
 	}
+
 	klog.Errorf("NumberOfEmptyReceives API returned empty result for uri: %q", queueURI)
+
 	return 0.0, nil
 }
 
-func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
-	if s.isPolling(key) {
-		return
-	}
-	s.setPolling(key)
-	if s.isPolling(key) {
-		return
-	}
-	defer s.unsetPolling(key)
-
+func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if queueSpec.workers == 0 {
 		// If there are no workers running we do a long poll to find a job(s)
 		// in the queue. On finding job(s) we increment the queue message
@@ -203,15 +162,15 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 	// happen based on what exactly the queue length is. The desired number of
 	// consmers should be calculated based on how high the value of queue length is.
 	// For this we will need ApproximateMessageVisible
-	approxMessagesVisible, err := s.getApproxMessagesVisibleInQueue(queueSpec.uri)
+	approxMessages, err := s.getApproxMessages(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to get approximate messages visible in queue %q, %v.",
 			queueSpec.name, err)
 		return
 	}
 
-	s.queues.updateMessage(key, approxMessagesVisible)
-	if approxMessagesVisible != 0 {
+	s.queues.updateMessage(key, approxMessages)
+	if approxMessages != 0 {
 		time.Sleep(ShortPollInterval)
 		return
 	}
@@ -228,21 +187,6 @@ func (s *SQSPoller) poll(key string, queueSpec *QueueSpec) {
 
 	idleWorkers := int32(emptyReceives * float64(queueSpec.workers))
 	s.queues.updateIdleWorkers(key, idleWorkers)
-
 	time.Sleep(ShortPollInterval)
 	return
-}
-
-func (s *SQSPoller) Run() {
-	go s.lister()
-	go s.updater()
-
-	for {
-		queues := s.queues.List()
-		for key, queueSpec := range queues {
-			go s.poll(key, queueSpec)
-		}
-		// TODO: use tickers
-		time.Sleep(time.Second * 2)
-	}
 }

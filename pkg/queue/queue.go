@@ -20,7 +20,7 @@ const (
 type Queues struct {
 	addCh           chan map[string]*QueueSpec
 	deleteCh        chan string
-	listCh          chan map[string]*QueueSpec
+	listCh          chan chan map[string]*QueueSpec
 	updateMessageCh chan map[string]int32
 	idleWorkerCh    chan map[string]int32
 	item            map[string]*QueueSpec `json:"queues"`
@@ -43,38 +43,10 @@ func NewQueues() *Queues {
 	return &Queues{
 		addCh:           make(chan map[string]*QueueSpec),
 		deleteCh:        make(chan string),
-		listCh:          make(chan map[string]*QueueSpec),
+		listCh:          make(chan chan map[string]*QueueSpec),
 		updateMessageCh: make(chan map[string]int32),
 		idleWorkerCh:    make(chan map[string]int32),
 		item:            make(map[string]*QueueSpec),
-	}
-}
-
-func (q *Queues) List() map[string]*QueueSpec {
-	return <-q.listCh
-}
-
-func (q *Queues) listQueueSpec(namespace string, name string) *QueueSpec {
-	key := getKey(namespace, name)
-	item := q.List()
-	if _, ok := item[key]; !ok {
-		return nil
-	}
-	return item[key]
-}
-
-func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, int32) {
-	spec := q.listQueueSpec(namespace, name)
-	if spec == nil {
-		return "", 0, 0
-	}
-
-	return spec.name, spec.messages, spec.idleWorkers
-}
-
-func (q *Queues) ListSync() {
-	for {
-		q.listCh <- q.item
 	}
 }
 
@@ -95,7 +67,7 @@ func (q *Queues) updateIdleWorkers(key string, idleWorkers int32) {
 	}
 }
 
-func (q *Queues) Sync() {
+func (q *Queues) Sync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case queueSpecMap := <-q.addCh:
@@ -121,6 +93,11 @@ func (q *Queues) Sync() {
 			if ok {
 				delete(q.item, key)
 			}
+		case listResultCh := <-q.listCh:
+			listResultCh <- q.item
+		case <-stopCh:
+			klog.Info("Stopping queue syncer gracefully.")
+			return
 		}
 	}
 }
@@ -146,7 +123,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 	}
 
 	messages := int32(UnsyncedQueueMessageCount)
-	spec := q.listQueueSpec(namespace, name)
+	spec := q.listQueueByNamespace(namespace, name)
 	if spec != nil {
 		messages = spec.messages
 	}
@@ -170,6 +147,34 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 func (q *Queues) Delete(namespace string, name string) error {
 	q.deleteCh <- getKey(namespace, name)
 	return nil
+}
+
+func (q *Queues) List() map[string]*QueueSpec {
+	listResultCh := make(chan map[string]*QueueSpec)
+	q.listCh <- listResultCh
+	return <-listResultCh
+}
+
+func (q *Queues) ListQueue(key string) *QueueSpec {
+	item := q.List()
+	if _, ok := item[key]; !ok {
+		return nil
+	}
+
+	return item[key]
+}
+
+func (q *Queues) listQueueByNamespace(namespace string, name string) *QueueSpec {
+	return q.ListQueue(getKey(namespace, name))
+}
+
+func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, int32) {
+	spec := q.listQueueByNamespace(namespace, name)
+	if spec == nil {
+		return "", 0, 0
+	}
+
+	return spec.name, spec.messages, spec.idleWorkers
 }
 
 func parseQueueURI(uri string) (string, string, error) {

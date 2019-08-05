@@ -73,14 +73,17 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	}
 
 	queues := queue.NewQueues()
-	go queues.Sync()
-	go queues.ListSync()
+	go queues.Sync(stopCh)
 
-	sqsPoller, err := queue.NewSQSPoller("ap-south-1", queues)
+	// Make all the message service providers and start their pollers
+	sqs, err := queue.NewSQS("ap-south-1", queues)
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}
-	go sqsPoller.Run()
+	sqsPoller := queue.NewPoller(queues, sqs)
+	for _, poller := range []queue.Poller{sqsPoller} {
+		go poller.Run(stopCh)
+	}
 
 	// Note: 10 here signifies every 10 seconds the update event will trigger
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*10)

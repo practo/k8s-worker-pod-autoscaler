@@ -321,7 +321,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 }
 
 // getDesiredWorkers finds the desired number of workers which are required
-// example: https://play.golang.org/p/NoHFKZvkBZu
+// example: https://play.golang.org/p/VpUUkDkQ0LM
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
@@ -333,9 +333,6 @@ func (c *Controller) getDesiredWorkers(
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
 
 	if currentWorkers == 0 {
-		if idleWorkers != 0 {
-			return currentWorkers
-		}
 		desiredWorkers := int32(math.Ceil(usageRatio))
 		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
