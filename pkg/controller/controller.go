@@ -211,7 +211,7 @@ func (c *Controller) processNextWorkItem() bool {
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
-		klog.Infof("Successfully synced '%s'", event)
+		// klog.Infof("Successfully synced '%s'", event)
 		return nil
 	}(obj)
 
@@ -316,12 +316,13 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
+	// TODO: organize and log events
 	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
 // getDesiredWorkers finds the desired number of workers which are required
-// example: https://play.golang.org/p/VpUUkDkQ0LM
+// test case runs: https://play.golang.org/p/rliNO2b5nI0
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
@@ -332,8 +333,8 @@ func (c *Controller) getDesiredWorkers(
 
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
 
-	if currentWorkers == 0 {
-		desiredWorkers := int32(math.Ceil(usageRatio))
+	if currentWorkers == 0 || queueMessages > 0 {
+		desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
 		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
 
@@ -345,8 +346,7 @@ func (c *Controller) getDesiredWorkers(
 		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
 
-	desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
-	return keepInRange(minWorkers, maxWorkers, desiredWorkers)
+	return currentWorkers
 }
 
 func keepInRange(min int32, max int32, desired int32) int32 {
