@@ -63,9 +63,6 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 			listResultCh <- p.threads
 		case threadStatus := <-p.updateThreadCh:
 			for key, status := range threadStatus {
-				if _, ok := p.threads[key]; !ok {
-					continue
-				}
 				if status == false {
 					delete(p.threads, key)
 					return
@@ -89,10 +86,9 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 		select {
 		case <-ticker.C:
 			queues := p.queues.List()
-
 			// Create a new thread
-			threads := p.listThreads()
 			for key, _ := range queues {
+				threads := p.listThreads()
 				_, ok := threads[key]
 				if !ok {
 					p.updateThreads(key, true)
