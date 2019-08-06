@@ -2,7 +2,6 @@ package queue
 
 import (
 	"fmt"
-	"math"
 	"path"
 	"strconv"
 	"time"
@@ -89,6 +88,30 @@ func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 	return int32(i64), nil
 }
 
+func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
+	result, err := s.sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+		QueueUrl:       &queueURI,
+		AttributeNames: []*string{aws.String("ApproximateNumberOfMessagesNotVisible")},
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	messages, ok := result.Attributes["ApproximateNumberOfMessagesNotVisible"]
+	if !ok {
+		return 0, fmt.Errorf("ApproximateNumberOfMessages not found: %+v",
+			result.Attributes)
+	}
+
+	i64, err := strconv.ParseInt(*messages, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+
+	return int32(i64), nil
+}
+
 func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 	period := int64(300)
 	duration, err := time.ParseDuration("-5m")
@@ -112,7 +135,7 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 				},
 			},
 			Period: &period,
-			Stat:   aws.String("Average"),
+			Stat:   aws.String("p99"),
 		},
 	}
 
@@ -158,25 +181,41 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		return
 	}
 
-	// If the number of workers are not zero then we should make the target scaling
-	// happen based on what exactly the queue length is. The desired number of
-	// consmers should be calculated based on how high the value of queue length is.
-	// For this we will need ApproximateMessageVisible
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to get approximate messages visible in queue %q, %v.",
+		klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
 		return
 	}
 	klog.Infof("approxMessages=%d", approxMessages)
-
 	s.queues.updateMessage(key, approxMessages)
+
 	if approxMessages != 0 {
 		s.queues.updateIdleWorkers(key, -1)
 		time.Sleep(ShortPollInterval)
 		return
 	}
 
+	// approxMessagesNotVisible is queried to prevent scaling down when their are
+	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
+	// do not scale down as those messages are still being processed (and we dont know which worker)
+	approxMessagesNotVisible, err := s.getApproxMessagesNotVisible(queueSpec.uri)
+	if err != nil {
+		klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
+			queueSpec.name, err)
+		return
+	}
+	klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+
+	if approxMessagesNotVisible > 0 {
+		klog.Infof("approxMessagesNotVisible > 0, ignoring scaling down")
+		return
+	}
+
+	// emptyReceives is querired to find if there are idle workers and scale down to
+	// minimum workers, so scale down.
+	// TODO: Continuously high throughout workers are impacted by this and does not scale down
+	// to a lower value even if it is possible
 	// TODO: make this api call to execute only after 5minutes for every queue
 	// as it gets updated after only 5minutes (keep a cache)
 	emptyReceives, err := s.numberOfEmptyReceives(queueSpec.uri)
@@ -186,7 +225,13 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		return
 	}
 
-	idleWorkers := int32(math.Floor(emptyReceives * float64(queueSpec.workers)))
+	var idleWorkers int32
+	if emptyReceives == 1.0 {
+		idleWorkers = queueSpec.workers
+	} else {
+		idleWorkers = 0
+	}
+
 	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
 	s.queues.updateIdleWorkers(key, idleWorkers)
 	time.Sleep(ShortPollInterval)
