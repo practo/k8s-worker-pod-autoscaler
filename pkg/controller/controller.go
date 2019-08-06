@@ -2,12 +2,12 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
@@ -25,6 +25,7 @@ import (
 	samplescheme "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler/v1alpha1"
 	listers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1alpha1"
+	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
 )
 
 const controllerAgentName = "workerpodautoscaler-controller"
@@ -42,7 +43,21 @@ const (
 	// MessageResourceSynced is the message used for an Event fired when a WorkerPodAutoScaler
 	// is synced successfully
 	MessageResourceSynced = "WorkerPodAutoScaler synced successfully"
+
+	// WokerPodAutoScalerEventAdd stores the add event name
+	WokerPodAutoScalerEventAdd = "add"
+
+	// WokerPodAutoScalerEventUpdate stores the add event name
+	WokerPodAutoScalerEventUpdate = "update"
+
+	// WokerPodAutoScalerEventDelete stores the add event name
+	WokerPodAutoScalerEventDelete = "delete"
 )
+
+type WokerPodAutoScalerEvent struct {
+	key  string
+	name string
+}
 
 // Controller is the controller implementation for WorkerPodAutoScaler resources
 type Controller struct {
@@ -65,6 +80,10 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
+
+	// QueueList keeps the list of all the queues in memeory
+	// which is used by the core controller and the sqs exporter
+	Queues *queue.Queues
 }
 
 // NewController returns a new sample controller
@@ -72,7 +91,8 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
-	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer) *Controller {
+	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
+	queues *queue.Queues) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -93,37 +113,19 @@ func NewController(
 		workerPodAutoScalersSynced: workerPodAutoScalerInformer.Informer().HasSynced,
 		workqueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "WorkerPodAutoScalers"),
 		recorder:                   recorder,
+		Queues:                     queues,
 	}
 
 	klog.Info("Setting up event handlers")
+
 	// Set up an event handler for when WorkerPodAutoScaler resources change
 	workerPodAutoScalerInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueueWorkerPodAutoScaler,
+		AddFunc: controller.enqueueAddWorkerPodAutoScaler,
 		UpdateFunc: func(old, new interface{}) {
-			controller.enqueueWorkerPodAutoScaler(new)
+			controller.enqueueUpdateWorkerPodAutoScaler(new)
 		},
+		DeleteFunc: controller.enqueueDeleteWorkerPodAutoScaler,
 	})
-	// Set up an event handler for when Deployment resources change. This
-	// handler will lookup the owner of the given Deployment, and if it is
-	// owned by a WorkerPodAutoScaler resource will enqueue that WorkerPodAutoScaler resource for
-	// processing. This way, we don't need to implement custom logic for
-	// handling Deployment resources. More info on this pattern:
-	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
-	deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			newDepl := new.(*appsv1.Deployment)
-			oldDepl := old.(*appsv1.Deployment)
-			if newDepl.ResourceVersion == oldDepl.ResourceVersion {
-				// Periodic resync will send update events for all known Deployments.
-				// Two different versions of the same Deployment will always have different RVs.
-				return
-			}
-			controller.handleObject(new)
-		},
-		DeleteFunc: controller.handleObject,
-	})
-
 	return controller
 }
 
@@ -183,14 +185,15 @@ func (c *Controller) processNextWorkItem() bool {
 		// put back on the workqueue and attempted again after a back-off
 		// period.
 		defer c.workqueue.Done(obj)
-		var key string
 		var ok bool
 		// We expect strings to come off the workqueue. These are of the
 		// form namespace/name. We do this as the delayed nature of the
 		// workqueue means the items in the informer cache may actually be
 		// more up to date that when the item was initially put onto the
-		// workqueue.
-		if key, ok = obj.(string); !ok {
+		// workqueue.(PS: not anymore, its an WPA event)
+
+		event, ok := obj.(WokerPodAutoScalerEvent)
+		if !ok {
 			// As the item in the workqueue is actually invalid, we call
 			// Forget here else we'd go into a loop of attempting to
 			// process a work item that is invalid.
@@ -200,15 +203,15 @@ func (c *Controller) processNextWorkItem() bool {
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
 		// WorkerPodAutoScaler resource to be synced.
-		if err := c.syncHandler(key); err != nil {
+		if err := c.syncHandler(event); err != nil {
 			// Put the item back on the workqueue to handle any transient errors.
-			c.workqueue.AddRateLimited(key)
-			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+			c.workqueue.AddRateLimited(event)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", event, err.Error())
 		}
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
-		klog.Infof("Successfully synced '%s'", key)
+		// klog.Infof("Successfully synced '%s'", event)
 		return nil
 	}(obj)
 
@@ -223,7 +226,8 @@ func (c *Controller) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
 // with the current status of the resource.
-func (c *Controller) syncHandler(key string) error {
+func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
+	key := event.key
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -234,13 +238,12 @@ func (c *Controller) syncHandler(key string) error {
 	// Get the WorkerPodAutoScaler resource with this namespace/name
 	workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalers(namespace).Get(name)
 	if err != nil {
-		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop
-		// processing.
+		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
+			c.Queues.Delete(namespace, name)
 			return nil
 		}
-
 		return err
 	}
 
@@ -257,7 +260,8 @@ func (c *Controller) syncHandler(key string) error {
 	deployment, err := c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Create(newDeployment(workerPodAutoScaler))
+		return fmt.Errorf("Deployment %s not found in namespace %s",
+			deploymentName, workerPodAutoScaler.Namespace)
 	}
 
 	// If an error occurs during Get/Create, we'll requeue the item so we can
@@ -267,46 +271,101 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	// If the Deployment is not controlled by this WorkerPodAutoScaler resource, we should log
-	// a warning to the event recorder and ret
-	if !metav1.IsControlledBy(deployment, workerPodAutoScaler) {
-		msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
-		c.recorder.Event(workerPodAutoScaler, corev1.EventTypeWarning, ErrResourceExists, msg)
-		return fmt.Errorf(msg)
-	}
+	workers := *deployment.Spec.Replicas
 
-	// If this number of the replicas on the WorkerPodAutoScaler resource is specified, and the
-	// number does not equal the current desired replicas on the Deployment, we
-	// should update the Deployment resource.
-	if workerPodAutoScaler.Spec.Replicas != nil && *workerPodAutoScaler.Spec.Replicas != *deployment.Spec.Replicas {
-		klog.V(4).Infof("WorkerPodAutoScaler %s replicas: %d, deployment replicas: %d", name, *workerPodAutoScaler.Spec.Replicas, *deployment.Spec.Replicas)
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(newDeployment(workerPodAutoScaler))
+	switch event.name {
+	case WokerPodAutoScalerEventAdd:
+		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
+	case WokerPodAutoScalerEventUpdate:
+		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
+	case WokerPodAutoScalerEventDelete:
+		err = c.Queues.Delete(namespace, name)
 	}
-
-	// If an error occurs during Update, we'll requeue the item so we can
-	// attempt processing again later. THis could have been caused by a
-	// temporary network failure, or any other transient reason.
 	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
 		return err
+	}
+
+	queueName, queueMessages, idleWorkers := c.Queues.GetQueueInfo(namespace, name)
+	if queueName == "" {
+		return nil
+	}
+
+	desiredWorkers := c.getDesiredWorkers(
+		queueMessages,
+		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
+		deployment.Status.AvailableReplicas,
+		idleWorkers,
+		*workerPodAutoScaler.Spec.MinReplicas,
+		*workerPodAutoScaler.Spec.MaxReplicas,
+	)
+	klog.Infof("queue: %s, messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
+
+	if desiredWorkers != *deployment.Spec.Replicas {
+		deployment.Spec.Replicas = &desiredWorkers
+		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deployment)
+		if err != nil {
+			klog.Fatalf("Failed to update deployment: %v", err)
+		}
 	}
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(workerPodAutoScaler, deployment)
+	err = c.updateWorkerPodAutoScalerStatus(desiredWorkers, workerPodAutoScaler, deployment)
 	if err != nil {
 		return err
 	}
 
-	c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	// TODO: organize and log events
+	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
+// getDesiredWorkers finds the desired number of workers which are required
+// test case runs: https://play.golang.org/p/rliNO2b5nI0
+func (c *Controller) getDesiredWorkers(
+	queueMessages int32,
+	targetMessagesPerWorker int32,
+	currentWorkers int32,
+	idleWorkers int32,
+	minWorkers int32,
+	maxWorkers int32) int32 {
+
+	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
+
+	if currentWorkers == 0 || queueMessages > 0 {
+		desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
+		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
+	}
+
+	if idleWorkers != 0 {
+		if queueMessages == 0 {
+			return keepInRange(minWorkers, maxWorkers, 0)
+		}
+		desiredWorkers := currentWorkers - idleWorkers
+		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
+	}
+
+	return currentWorkers
+}
+
+func keepInRange(min int32, max int32, desired int32) int32 {
+	if desired > max {
+		return max
+	}
+	if desired < min {
+		return min
+	}
+	return desired
+}
+
+func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
-	workerPodAutoScalerCopy.Status.AvailableReplicas = deployment.Status.AvailableReplicas
+	workerPodAutoScalerCopy.Status.CurrentReplicas = deployment.Status.AvailableReplicas
+	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
@@ -315,93 +374,36 @@ func (c *Controller) updateWorkerPodAutoScalerStatus(workerPodAutoScaler *v1alph
 	return err
 }
 
-// enqueueWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
+// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than WorkerPodAutoScaler.
-func (c *Controller) enqueueWorkerPodAutoScaler(obj interface{}) {
+func (c *Controller) getKeyForWorkerPodAutoScaler(obj interface{}) string {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
 		utilruntime.HandleError(err)
-		return
+		return ""
 	}
-	c.workqueue.Add(key)
+	return key
 }
 
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the WorkerPodAutoScaler resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that WorkerPodAutoScaler resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *Controller) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		// If this object is not owned by a WorkerPodAutoScaler, we should not do anything more
-		// with it.
-		if ownerRef.Kind != "WorkerPodAutoScaler" {
-			return
-		}
-
-		workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalers(object.GetNamespace()).Get(ownerRef.Name)
-		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of workerPodAutoScaler '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
-		}
-
-		c.enqueueWorkerPodAutoScaler(workerPodAutoScaler)
-		return
-	}
+func (c *Controller) enqueueAddWorkerPodAutoScaler(obj interface{}) {
+	c.workqueue.Add(WokerPodAutoScalerEvent{
+		key:  c.getKeyForWorkerPodAutoScaler(obj),
+		name: WokerPodAutoScalerEventAdd,
+	})
 }
 
-// newDeployment creates a new Deployment for a WorkerPodAutoScaler resource. It also sets
-// the appropriate OwnerReferences on the resource so handleObject can discover
-// the WorkerPodAutoScaler resource that 'owns' it.
-func newDeployment(workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler) *appsv1.Deployment {
-	labels := map[string]string{
-		"app":        "nginx",
-		"controller": workerPodAutoScaler.Name,
-	}
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workerPodAutoScaler.Spec.DeploymentName,
-			Namespace: workerPodAutoScaler.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(workerPodAutoScaler, v1alpha1.SchemeGroupVersion.WithKind("WorkerPodAutoScaler")),
-			},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: workerPodAutoScaler.Spec.Replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx:latest",
-						},
-					},
-				},
-			},
-		},
-	}
+func (c *Controller) enqueueUpdateWorkerPodAutoScaler(obj interface{}) {
+	c.workqueue.Add(WokerPodAutoScalerEvent{
+		key:  c.getKeyForWorkerPodAutoScaler(obj),
+		name: WokerPodAutoScalerEventUpdate,
+	})
+}
+
+func (c *Controller) enqueueDeleteWorkerPodAutoScaler(obj interface{}) {
+	c.workqueue.Add(WokerPodAutoScalerEvent{
+		key:  c.getKeyForWorkerPodAutoScaler(obj),
+		name: WokerPodAutoScalerEventDelete,
+	})
 }

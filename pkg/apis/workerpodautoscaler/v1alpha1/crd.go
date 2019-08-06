@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	CRDShortName string = "spa"
+	CRDShortName string = "wpa"
 	CRDSingular  string = "workerpodautoscaler"
 	CRDPlural    string = "workerpodautoscalers"
 

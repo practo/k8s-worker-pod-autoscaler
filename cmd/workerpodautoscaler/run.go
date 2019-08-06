@@ -17,6 +17,7 @@ import (
 	workerpodautoscalercontroller "github.com/practo/k8s-worker-pod-autoscaler/pkg/controller"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions"
+	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
@@ -71,12 +72,27 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
+	queues := queue.NewQueues()
+	go queues.Sync(stopCh)
+
+	// Make all the message service providers and start their pollers
+	sqs, err := queue.NewSQS("ap-south-1", queues)
+	if err != nil {
+		klog.Fatalf("Error creating sqs Poller: %v", err)
+	}
+	sqsPoller := queue.NewPoller(queues, sqs)
+	for _, poller := range []queue.Poller{sqsPoller} {
+		go poller.Run(stopCh)
+	}
+
+	// Note: 10 here signifies every 10 seconds the update event will trigger
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*10)
+	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*10)
 
 	controller := workerpodautoscalercontroller.NewController(kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
 		customInformerFactory.K8s().V1alpha1().WorkerPodAutoScalers(),
+		queues,
 	)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
@@ -84,7 +100,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 
-	if err = controller.Run(2, stopCh); err != nil {
+	// TODO: autoscale the worker threads based on number of queues registred in WPA
+	if err = controller.Run(30, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 	return
