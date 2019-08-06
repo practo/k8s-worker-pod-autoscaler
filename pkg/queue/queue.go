@@ -13,6 +13,7 @@ const (
 	QueueProviderBeanstalk    = "beanstalk"
 	BenanstalkProtocol        = "beanstalk"
 	UnsyncedQueueMessageCount = -1
+	UnsyncedIdleWorkers       = -1
 )
 
 // Queues maintains a list of all queues as specified in WPAs in memory
@@ -53,11 +54,6 @@ func NewQueues() *Queues {
 func (q *Queues) updateMessage(key string, count int32) {
 	q.updateMessageCh <- map[string]int32{
 		key: count,
-	}
-	// We assume if the queue length is not zero
-	// then there are no idle workers
-	if count != 0 {
-		q.updateIdleWorkers(key, int32(0))
 	}
 }
 
@@ -123,9 +119,11 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 	}
 
 	messages := int32(UnsyncedQueueMessageCount)
+	idleWorkers := int32(UnsyncedIdleWorkers)
 	spec := q.listQueueByNamespace(namespace, name)
 	if spec != nil {
 		messages = spec.messages
+		idleWorkers = spec.idleWorkers
 	}
 
 	queueSpec := &QueueSpec{
@@ -137,7 +135,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 		provider:    provider,
 		messages:    messages,
 		workers:     workers,
-		idleWorkers: 0,
+		idleWorkers: idleWorkers,
 	}
 
 	q.addCh <- map[string]*QueueSpec{key: queueSpec}

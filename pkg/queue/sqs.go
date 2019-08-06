@@ -2,6 +2,7 @@ package queue
 
 import (
 	"fmt"
+	"math"
 	"path"
 	"strconv"
 	"time"
@@ -16,7 +17,7 @@ import (
 
 const (
 	LongPollInterval  = 20
-	ShortPollInterval = 500 * time.Millisecond
+	ShortPollInterval = 4000 * time.Millisecond
 )
 
 // SQS is used to by the Poller to get the queue
@@ -50,7 +51,7 @@ func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 			"SentTimestamp",
 		}),
 		VisibilityTimeout:   aws.Int64(0),
-		MaxNumberOfMessages: aws.Int64(10),
+		MaxNumberOfMessages: aws.Int64(1),
 		MessageAttributeNames: aws.StringSlice([]string{
 			"All",
 		}),
@@ -89,13 +90,12 @@ func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 }
 
 func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
-	period := int64(60)
-	endTime := time.Now()
+	period := int64(300)
 	duration, err := time.ParseDuration("-5m")
-
 	if err != nil {
 		return 0.0, err
 	}
+	endTime := time.Now().Add(duration)
 	startTime := endTime.Add(duration)
 
 	query := &cloudwatch.MetricDataQuery{
@@ -134,27 +134,27 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 		return *result.MetricDataResults[0].Values[0], nil
 	}
 
-	klog.Errorf("NumberOfEmptyReceives API returned empty result for uri: %q", queueURI)
+	klog.Errorf("Number Of Empty Receives API returned empty result for uri: %q", queueURI)
 
 	return 0.0, nil
 }
 
 func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if queueSpec.workers == 0 {
+		s.queues.updateIdleWorkers(key, -1)
+
 		// If there are no workers running we do a long poll to find a job(s)
 		// in the queue. On finding job(s) we increment the queue message
 		// by no of messages received to trigger scale up.
 		// Long polling is done to keep SQS api calls to minimum.
 		messagesReceived, err := s.longPollReceiveMessage(queueSpec.uri)
 		if err != nil {
-			klog.Errorf("Unable to receive message from queue %q, %v.",
+			klog.Fatalf("Unable to receive message from queue %q, %v.",
 				queueSpec.name, err)
 			return
 		}
 
-		if messagesReceived > 0 {
-			s.queues.updateMessage(key, messagesReceived)
-		}
+		s.queues.updateMessage(key, messagesReceived)
 		return
 	}
 
@@ -164,13 +164,15 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	// For this we will need ApproximateMessageVisible
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)
 	if err != nil {
-		klog.Errorf("Unable to get approximate messages visible in queue %q, %v.",
+		klog.Fatalf("Unable to get approximate messages visible in queue %q, %v.",
 			queueSpec.name, err)
 		return
 	}
+	klog.Infof("approxMessages=%d", approxMessages)
 
 	s.queues.updateMessage(key, approxMessages)
 	if approxMessages != 0 {
+		s.queues.updateIdleWorkers(key, -1)
 		time.Sleep(ShortPollInterval)
 		return
 	}
@@ -178,14 +180,14 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	// TODO: make this api call to execute only after 5minutes for every queue
 	// as it gets updated after only 5minutes (keep a cache)
 	emptyReceives, err := s.numberOfEmptyReceives(queueSpec.uri)
-	klog.Infof("numberOfEmptyReceives", emptyReceives)
 	if err != nil {
-		klog.Errorf("Unable to fetch empty revieve metric for queue %q, %v.",
+		klog.Fatalf("Unable to fetch empty revieve metric for queue %q, %v.",
 			queueSpec.name, err)
 		return
 	}
 
-	idleWorkers := int32(emptyReceives * float64(queueSpec.workers))
+	idleWorkers := int32(math.Floor(emptyReceives * float64(queueSpec.workers)))
+	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
 	s.queues.updateIdleWorkers(key, idleWorkers)
 	time.Sleep(ShortPollInterval)
 	return
