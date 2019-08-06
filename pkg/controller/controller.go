@@ -339,9 +339,6 @@ func (c *Controller) getDesiredWorkers(
 	}
 
 	if idleWorkers != 0 {
-		if queueMessages == 0 {
-			return keepInRange(minWorkers, maxWorkers, 0)
-		}
 		desiredWorkers := currentWorkers - idleWorkers
 		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
 	}
