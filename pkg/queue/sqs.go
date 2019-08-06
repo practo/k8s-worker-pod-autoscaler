@@ -25,6 +25,14 @@ type SQS struct {
 	queues    *Queues
 	sqsClient *sqs.SQS
 	cwClient  *cloudwatch.CloudWatch
+
+	// cache the numberOfEmptyReceives as it is refreshed
+	// in aws every 5minutes - save un-necessary api calls
+	cache               map[string]float64
+	cacheValidity       time.Duration
+	cacheListCh         chan chan map[string]float64
+	cacheUpdateCh       chan map[string]float64
+	lastCachedTimestamp int64
 }
 
 func NewSQS(awsRegion string, queues *Queues) (QueuingService, error) {
@@ -40,6 +48,11 @@ func NewSQS(awsRegion string, queues *Queues) (QueuingService, error) {
 		queues:    queues,
 		sqsClient: sqs.New(sess),
 		cwClient:  cloudwatch.New(sess),
+
+		cache:         make(map[string]float64),
+		cacheValidity: time.Second * time.Duration(300),
+		cacheListCh:   make(chan chan map[string]float64),
+		cacheUpdateCh: make(chan map[string]float64),
 	}, nil
 }
 
@@ -162,6 +175,60 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 	return 0.0, nil
 }
 
+func (s *SQS) cachedNumberOfEmptyReceives(queueURI string) (float64, error) {
+	now := time.Now().UnixNano()
+	if (s.lastCachedTimestamp + s.cacheValidity.Nanoseconds()) > now {
+		cache, cacheHit := s.getCache(queueURI)
+		if cacheHit {
+			return cache, nil
+		}
+	}
+
+	emptyReceives, err := s.numberOfEmptyReceives(queueURI)
+	if err != nil {
+		return emptyReceives, err
+	}
+	s.updateCache(queueURI, emptyReceives)
+	s.lastCachedTimestamp = now
+	return emptyReceives, nil
+}
+
+func (s *SQS) listAllCache() map[string]float64 {
+	cacheResultCh := make(chan map[string]float64)
+	s.cacheListCh <- cacheResultCh
+	return <-cacheResultCh
+}
+
+func (s *SQS) getCache(queueURI string) (float64, bool) {
+	allCache := s.listAllCache()
+	if cache, ok := allCache[queueURI]; ok {
+		return cache, true
+	}
+	return 0.0, false
+}
+
+func (s *SQS) updateCache(key string, cache float64) {
+	s.cacheUpdateCh <- map[string]float64{
+		key: cache,
+	}
+}
+
+func (s *SQS) Sync(stopCh <-chan struct{}) {
+	for {
+		select {
+		case update := <-s.cacheUpdateCh:
+			for key, value := range update {
+				s.cache[key] = value
+			}
+		case cacheResultCh := <-s.cacheListCh:
+			cacheResultCh <- s.cache
+		case <-stopCh:
+			klog.Info("Stopping sqs syncer gracefully.")
+			return
+		}
+	}
+}
+
 func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if queueSpec.workers == 0 {
 		s.queues.updateIdleWorkers(key, -1)
@@ -216,9 +283,7 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	// minimum workers, so scale down.
 	// TODO: Continuously high throughout workers are impacted by this and does not scale down
 	// to a lower value even if it is possible
-	// TODO: make this api call to execute only after 5minutes for every queue
-	// as it gets updated after only 5minutes (keep a cache)
-	emptyReceives, err := s.numberOfEmptyReceives(queueSpec.uri)
+	emptyReceives, err := s.cachedNumberOfEmptyReceives(queueSpec.uri)
 	if err != nil {
 		klog.Fatalf("Unable to fetch empty revieve metric for queue %q, %v.",
 			queueSpec.name, err)
