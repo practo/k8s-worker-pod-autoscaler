@@ -19,9 +19,9 @@ spec:
      - name: wpa
        env:
        - name: AWS_ACCESS_KEY_ID
-         value: {{ WPA_AWS_ACCESS_KEY_ID }}
+         value: {WPA_AWS_ACCESS_KEY_ID}
        - name: AWS_SECRET_ACCESS_KEY
-         value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
+         value: {WPA_AWS_SECRET_ACCESS_KEY}
        image: practodev/workerpodautoscaler:v0.1.0
        imagePullPolicy: Always
        command:
@@ -29,7 +29,7 @@ spec:
        - run
        - --resync-period=20
        - --wpa-threads=10
-       - --aws-region={{ WPA_AWS_REGION }}
+       - --aws-region={WPA_AWS_REGION}
        - --kube-config=''
        - --sqs-short-poll-interval=20
        - --sqs-long-poll-interval=20
