@@ -151,8 +151,6 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-
-	klog.Info("Started workers")
 	<-stopCh
 	klog.Info("Shutting down workers")
 
@@ -302,8 +300,9 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	klog.Infof("queue: %s, messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
-		deployment.Spec.Replicas = &desiredWorkers
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deployment)
+		deploymentCopy := deployment.DeepCopy()
+		deploymentCopy.Spec.Replicas = &desiredWorkers
+		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deploymentCopy)
 		if err != nil {
 			klog.Fatalf("Failed to update deployment: %v", err)
 		}
@@ -322,7 +321,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 }
 
 // getDesiredWorkers finds the desired number of workers which are required
-// test case runs: https://play.golang.org/p/rliNO2b5nI0
+// test case runs: https://play.golang.org/p/G5YLhylQZ78
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
@@ -335,18 +334,18 @@ func (c *Controller) getDesiredWorkers(
 
 	if currentWorkers == 0 || queueMessages > 0 {
 		desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
-		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
+		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
 	if idleWorkers != 0 {
 		desiredWorkers := currentWorkers - idleWorkers
-		return keepInRange(minWorkers, maxWorkers, desiredWorkers)
+		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
 	return currentWorkers
 }
 
-func keepInRange(min int32, max int32, desired int32) int32 {
+func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 {
 	if desired > max {
 		return max
 	}
