@@ -10,7 +10,6 @@ spec:
      labels:
        app: workerpodautoscaler
    spec:
-     serviceAccountName: central-sa
      tolerations:
      - effect: NoExecute
        operator: Exists
