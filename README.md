@@ -10,6 +10,7 @@ Currently the supported Message Queueing Services are AWS SQS and Beanstalk.
 Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and start the controller. The controller watches over all the specified queues in AWS SQS and beanstalk and scales the Kubernetes deployments based on the specification.
 
 ```bash
+export AWS_REGION='ap-south-1'
 export AWS_ACCESS_KEY_ID='sample-aws-access-key-id'
 export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh
@@ -70,7 +71,7 @@ spec:
 
 ## WPA Controller
 
-```bash
+```
 $ bin/darwin_amd64/workerpodautoscaler run --help
 Run the workerpodautoscaler
 
@@ -89,3 +90,29 @@ Flags:
       --sqs-short-poll-interval int   the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
       --wpa-threads int               wpa threadiness, number of threads to process wpa resources (default 10)
 ```
+
+
+## Contributing
+It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L8) implementation needs to be written down to make that possible.
+
+- To build and the product locally after making code changes.
+```
+$ make build
+making bin/darwin_amd64/workerpodautoscaler
+
+$ bin/darwin_amd64/workerpodautoscaler run
+```
+- To add new dependency
+```
+go mod vendor
+```
+- Get up to speed with go in no time - https://gobyexample.com
+- Install go locally - https://golang.org/doc/install
+- How to write go code - https://golang.org/doc/code.html
+- Dependency management using go modules - https://github.com/liggitt/gomodules/blob/master/README.md
+
+## Thanks
+
+Thanks to kubernetes team for making [crds](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and [sample controller](https://github.com/kubernetes/sample-controller)
+
+[latest-release]: https://github.com/practo/k8s-worker-pod-autoscaler/releases
