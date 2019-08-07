@@ -50,3 +50,42 @@ Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. B
 3. **Fast Scaling**: We wanted to achieve super fast near real time scaling. As soon as a job comes in queue the containers should scale if needed. The concurrency, speed and interval of sync have been made configurable to keep the API calls to minimum.
 
 4. **On-demand Workers:** min=0 is supported. It's also supported in HPA.
+
+## Configuration
+
+## WPA Resource
+
+```yaml
+apiVersion: k8s.practo.dev/v1alpha1
+kind: WorkerPodAutoScaler
+metadata:
+  name: example-wpa
+spec:
+  minReplicas: 0
+  maxReplicas: 10
+  targetMessagesPerWorker: 2
+  queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
+  deploymentName: example-deployment
+```
+
+## WPA Controller
+
+```bash
+$ bin/darwin_amd64/workerpodautoscaler run --help
+Run the workerpodautoscaler
+
+Usage:
+  workerpodautoscaler run [flags]
+
+Examples:
+  workerpodautoscaler run
+
+Flags:
+      --aws-region string             aws region of SQS (default "ap-south-1")
+  -h, --help                          help for run
+      --kube-config string            path of the kube config file, if not specified in cluster config is used
+      --resync-period int             sync period for the worker pod autoscaler (default 20)
+      --sqs-long-poll-interval int    the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
+      --sqs-short-poll-interval int   the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
+      --wpa-threads int               wpa threadiness, number of threads to process wpa resources (default 10)
+```

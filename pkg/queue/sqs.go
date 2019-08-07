@@ -14,17 +14,15 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-const (
-	LongPollInterval  = 20
-	ShortPollInterval = 4000 * time.Millisecond
-)
-
 // SQS is used to by the Poller to get the queue
 // information from AWS SQS, it implements the QueuingService interface
 type SQS struct {
 	queues    *Queues
 	sqsClient *sqs.SQS
 	cwClient  *cloudwatch.CloudWatch
+
+	shortPollInterval time.Duration
+	longPollInterval  int64
 
 	// cache the numberOfEmptyReceives as it is refreshed
 	// in aws every 5minutes - save un-necessary api calls
@@ -35,7 +33,12 @@ type SQS struct {
 	lastCachedTimestamp int64
 }
 
-func NewSQS(awsRegion string, queues *Queues) (QueuingService, error) {
+func NewSQS(
+	awsRegion string,
+	queues *Queues,
+	shortPollInterval int,
+	longPollInterval int) (QueuingService, error) {
+
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(awsRegion)},
 	)
@@ -48,6 +51,9 @@ func NewSQS(awsRegion string, queues *Queues) (QueuingService, error) {
 		queues:    queues,
 		sqsClient: sqs.New(sess),
 		cwClient:  cloudwatch.New(sess),
+
+		shortPollInterval: time.Second * time.Duration(shortPollInterval),
+		longPollInterval:  int64(longPollInterval),
 
 		cache:         make(map[string]float64),
 		cacheValidity: time.Second * time.Duration(300),
@@ -67,7 +73,7 @@ func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 		MessageAttributeNames: aws.StringSlice([]string{
 			"All",
 		}),
-		WaitTimeSeconds: aws.Int64(LongPollInterval),
+		WaitTimeSeconds: aws.Int64(s.longPollInterval),
 	})
 
 	if err != nil {
@@ -259,7 +265,7 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	if approxMessages != 0 {
 		s.queues.updateIdleWorkers(key, -1)
-		time.Sleep(ShortPollInterval)
+		time.Sleep(s.shortPollInterval)
 		return
 	}
 
@@ -299,6 +305,6 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
 	s.queues.updateIdleWorkers(key, idleWorkers)
-	time.Sleep(ShortPollInterval)
+	time.Sleep(s.shortPollInterval)
 	return
 }

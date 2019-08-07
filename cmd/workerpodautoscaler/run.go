@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	kubeinformers "k8s.io/client-go/informers"
@@ -39,15 +41,47 @@ func (v *runCmd) new() *cobra.Command {
 		Run:     v.run,
 	})
 
+	flags := v.Cmd.Flags()
+
+	flagNames := []string{
+		"resync-period",
+		"wpa-threads",
+		"aws-region",
+		"kube-config",
+		"sqs-short-poll-interval",
+		"sqs-long-poll-interval",
+	}
+
+	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
+	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
+	flags.String("aws-region", "ap-south-1", "aws region of SQS")
+	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
+	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
+	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
+
+	for _, flagName := range flagNames {
+		if err := v.BindFlag(flagName); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	}
+
 	return v.Cmd
 }
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
+	resyncPeriod := time.Second * time.Duration(v.Viper.GetInt("resync-period"))
+	wpaThraeds := v.Viper.GetInt("wpa-threads")
+	awsRegion := v.Viper.GetString("aws-region")
+	kubeConfigPath := v.Viper.GetString("kube-config")
+	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
+	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
+
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
 	// cfg, err := createRestConfig("")
-	cfg, err := createRestConfig("/Users/alok87/.kube/config")
+	cfg, err := createRestConfig(kubeConfigPath)
 	if err != nil {
 		klog.Fatalf("Error building kubeconfig: %s", err.Error())
 	}
@@ -76,7 +110,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	go queues.Sync(stopCh)
 
 	// Make all the message service providers and start their pollers
-	sqs, err := queue.NewSQS("ap-south-1", queues)
+	sqs, err := queue.NewSQS(awsRegion, queues, shortPollInterval, longPollInterval)
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}
@@ -87,9 +121,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		go poller.Run(stopCh)
 	}
 
-	// Note: 10 here signifies every 10 seconds the update event will trigger
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*10)
-	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*10)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncPeriod)
+	customInformerFactory := informers.NewSharedInformerFactory(customClient, resyncPeriod)
 
 	controller := workerpodautoscalercontroller.NewController(kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
@@ -103,7 +136,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	customInformerFactory.Start(stopCh)
 
 	// TODO: autoscale the worker threads based on number of queues registred in WPA
-	if err = controller.Run(30, stopCh); err != nil {
+	if err = controller.Run(wpaThraeds, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 	return
