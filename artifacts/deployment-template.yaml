@@ -10,6 +10,7 @@ spec:
      labels:
        app: workerpodautoscaler
    spec:
+     serviceAccountName: workerpodautoscaler
      tolerations:
      - effect: NoExecute
        operator: Exists
@@ -30,7 +31,6 @@ spec:
        - --resync-period=20
        - --wpa-threads=10
        - --aws-region={{ WPA_AWS_REGION }}
-       - --kube-config=""
        - --sqs-short-poll-interval=20
        - --sqs-long-poll-interval=20
        resources:

@@ -2,12 +2,12 @@
 
 set -e
 
-template_deployment='./artifacts/deployment-template.yaml'
+serviceaccount='./artifacts/serviceaccount.yaml'
+clusterrole='./artifacts/clusterrole.yaml'
+clusterrolebinding='./artifacts/clusterrolebinding.yaml'
 new_deployment='./artifacts/deployment.yaml'
+template_deployment='./artifacts/deployment-template.yaml'
 
-cp -f $template_deployment $new_deployment
-
-echo "Substituting variables in $template_deployment to create $new_deployment"
 if [ -z "${AWS_REGION}" ]; then
     echo "AWS_REGION not set in environment, exiting"
     exit 1
@@ -21,11 +21,15 @@ if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
     exit 1
 fi
 
-perl -i -wpe "s/{{ WPA_AWS_REGION }}/${AWS_REGION}/g" ${new_deployment}
-perl -i -wpe "s/{{ WPA_AWS_ACCESS_KEY_ID }}/${AWS_ACCESS_KEY_ID}/g" ${new_deployment}
-perl -i -wpe "s/{{ WPA_AWS_SECRET_ACCESS_KEY }}/${AWS_SECRET_ACCESS_KEY}/g" ${new_deployment}
+export WPA_AWS_REGION="${AWS_REGION}"
+export WPA_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+export WPA_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 
-cat ${new_deployment}
+cp -f $template_deployment $new_deployment
+./hack/generate.sh ${new_deployment}
 
-echo "Applying worker pod autoscaler deployment in kubernetes."
+kubectl apply -f ${serviceaccount}
+kubectl apply -f ${clusterrole}
+kubectl apply -f ${clusterrolebinding}
 kubectl apply -f ${new_deployment}
+kubectl get pods -n kube-system | grep workerpodautoscaler
