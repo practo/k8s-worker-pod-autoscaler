@@ -2,12 +2,12 @@
 
 Scale kubernetes pods based on the Queue length of a queue in a Message Queueing Service. Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length.
 
-Currently the supported Message Queueing Services are AWS SQS and Beanstalk.
+Currently the supported Message Queueing Services is only AWS SQS. There is a plan to integrate other commonly used message queing services.
 
 # Install the WorkerPodAutoscaler
 
 ### Install
-Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and start the controller. The controller watches over all the specified queues in AWS SQS and beanstalk and scales the Kubernetes deployments based on the specification.
+Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and start the controller. The controller watches over all the specified queues in AWS SQS and scales the Kubernetes deployments based on the specification.
 
 ```bash
 export AWS_REGION='ap-south-1'
@@ -15,6 +15,8 @@ export AWS_ACCESS_KEY_ID='sample-aws-access-key-id'
 export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh
 ```
+
+Note: IAM policy required is [this](todo)
 
 ### Verify Installation
 Check the wpa resource is accessible using kubectl
@@ -24,14 +26,14 @@ kubectl get wpa
 ```
 
 # Example
-Please install following above before trying the below example.
+Do install the controller before going with the example.
 
 - Create Deployment that needs to scale based on queue length.
 ```bash
 kubectl create -f artificats/example-deployment.yaml
 ```
 
-- Create `WPA object (example-wpa)` that will scale the `example-deployment` based on SQS queue length.
+- Create `WPA object (example-wpa)` that will start scaling the `example-deployment` based on SQS queue length.
 ```bash
 kubectl create -f artifacts/example-wpa.yaml
 ```
@@ -95,21 +97,18 @@ Flags:
 ## Contributing
 It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L8) implementation needs to be written down to make that possible.
 
-- To build and the product locally after making code changes.
+- After making code changes, run the below commands dto buid and run it locally. 
 ```
 $ make build
 making bin/darwin_amd64/workerpodautoscaler
 
-$ bin/darwin_amd64/workerpodautoscaler run
+$ bin/darwin_amd64/workerpodautoscaler run --kube-config /home/user/.kube/config
 ```
-- To add new dependency
-```
-go mod vendor
-```
+- To add a new dependency use `go mod vendor`
+- Dependency management using go modules - https://github.com/liggitt/gomodules/blob/master/README.md
 - Get up to speed with go in no time - https://gobyexample.com
 - Install go locally - https://golang.org/doc/install
 - How to write go code - https://golang.org/doc/code.html
-- Dependency management using go modules - https://github.com/liggitt/gomodules/blob/master/README.md
 
 ## Thanks
 
