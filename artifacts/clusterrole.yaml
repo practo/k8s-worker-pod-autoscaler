@@ -15,8 +15,10 @@ rules:
   - workerpodautoscalers 
   verbs:
   - list
+  - update
   - get
   - watch
+  - delete
 - apiGroups:
   - ""
   resources:
@@ -31,4 +33,6 @@ rules:
   - deployments
   verbs:
   - get
+  - list
+  - watch
   - update

@@ -21,10 +21,12 @@ if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
     exit 1
 fi
 
+export WPA_AWS_REGION="${AWS_REGION}"
+export WPA_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+export WPA_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+
 cp -f $template_deployment $new_deployment
-perl -i -pe "s#{WPA_AWS_REGION}#${AWS_REGION}#g" ${new_deployment}
-perl -i -pe "s#{WPA_AWS_ACCESS_KEY_ID}#/${AWS_ACCESS_KEY_ID}#g" ${new_deployment}
-perl -i -pe "s#{WPA_AWS_SECRET_ACCESS_KEY}#/${AWS_SECRET_ACCESS_KEY}#g" ${new_deployment}
+./hack/generate.sh ${new_deployment}
 
 kubectl apply -f ${serviceaccount}
 kubectl apply -f ${clusterrole}
