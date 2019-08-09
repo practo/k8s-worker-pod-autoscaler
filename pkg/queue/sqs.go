@@ -237,7 +237,6 @@ func (s *SQS) Sync(stopCh <-chan struct{}) {
 
 func (s *SQS) waitForShortPollInterval() {
 	time.Sleep(s.shortPollInterval)
-	return
 }
 
 func (s *SQS) poll(key string, queueSpec *QueueSpec) {
@@ -268,7 +267,8 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	if approxMessages != 0 {
 		s.queues.updateIdleWorkers(key, -1)
-		return s.waitForShortPollInterval()
+		s.waitForShortPollInterval()
+		return
 	}
 
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
@@ -283,7 +283,8 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("approxMessagesNotVisible > 0, ignoring scaling down")
-		return s.waitForShortPollInterval()
+		s.waitForShortPollInterval()
+		return
 	}
 
 	// emptyReceives is querired to find if there are idle workers and scale down to
@@ -305,5 +306,6 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
 	s.queues.updateIdleWorkers(key, idleWorkers)
-	return s.waitForShortPollInterval()
+	s.waitForShortPollInterval()
+	return
 }
