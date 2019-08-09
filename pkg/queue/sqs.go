@@ -235,6 +235,11 @@ func (s *SQS) Sync(stopCh <-chan struct{}) {
 	}
 }
 
+func (s *SQS) waitForShortPollInterval() {
+	time.Sleep(s.shortPollInterval)
+	return
+}
+
 func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if queueSpec.workers == 0 {
 		s.queues.updateIdleWorkers(key, -1)
@@ -247,7 +252,6 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		if err != nil {
 			klog.Fatalf("Unable to receive message from queue %q, %v.",
 				queueSpec.name, err)
-			return
 		}
 
 		s.queues.updateMessage(key, messagesReceived)
@@ -258,15 +262,13 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if err != nil {
 		klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
-		return
 	}
 	klog.Infof("approxMessages=%d", approxMessages)
 	s.queues.updateMessage(key, approxMessages)
 
 	if approxMessages != 0 {
 		s.queues.updateIdleWorkers(key, -1)
-		time.Sleep(s.shortPollInterval)
-		return
+		return s.waitForShortPollInterval()
 	}
 
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
@@ -276,13 +278,12 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if err != nil {
 		klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
 			queueSpec.name, err)
-		return
 	}
 	klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("approxMessagesNotVisible > 0, ignoring scaling down")
-		return
+		return s.waitForShortPollInterval()
 	}
 
 	// emptyReceives is querired to find if there are idle workers and scale down to
@@ -293,7 +294,6 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if err != nil {
 		klog.Fatalf("Unable to fetch empty revieve metric for queue %q, %v.",
 			queueSpec.name, err)
-		return
 	}
 
 	var idleWorkers int32
@@ -305,6 +305,5 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
 	s.queues.updateIdleWorkers(key, idleWorkers)
-	time.Sleep(s.shortPollInterval)
-	return
+	return s.waitForShortPollInterval()
 }
