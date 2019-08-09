@@ -256,7 +256,6 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	// Get the deployment with the name specified in WorkerPodAutoScaler.spec
 	deployment, err := c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
-	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
 		return fmt.Errorf("Deployment %s not found in namespace %s",
 			deploymentName, workerPodAutoScaler.Namespace)
@@ -300,6 +299,14 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	klog.Infof("queue: %s, messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
+		deployment, err = c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("Deployment %s not found in namespace %s",
+				deploymentName, workerPodAutoScaler.Namespace)
+		}
+		if err != nil {
+			klog.Fatalf("Failed to get deployment: %v", err)
+		}
 		deploymentCopy := deployment.DeepCopy()
 		deploymentCopy.Spec.Replicas = &desiredWorkers
 		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deploymentCopy)
