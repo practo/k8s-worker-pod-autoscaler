@@ -5,7 +5,6 @@ import (
 	"math"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -17,6 +16,7 @@ import (
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
@@ -299,32 +299,48 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	klog.Infof("queue: %s, messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
-		deployment, err = c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("Deployment %s not found in namespace %s",
-				deploymentName, workerPodAutoScaler.Namespace)
-		}
-		if err != nil {
-			klog.Fatalf("Failed to get deployment: %v", err)
-		}
-		deploymentCopy := deployment.DeepCopy()
-		deploymentCopy.Spec.Replicas = &desiredWorkers
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deploymentCopy)
-		if err != nil {
-			klog.Fatalf("Failed to update deployment: %v", err)
-		}
+		c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
 	}
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(desiredWorkers, workerPodAutoScaler, deployment)
+	err = c.updateWorkerPodAutoScalerStatus(
+		desiredWorkers,
+		workerPodAutoScaler,
+		deployment.Status.AvailableReplicas,
+	)
 	if err != nil {
-		return err
+		klog.Fatalf("Error updating status of worker pod autoscaler: %v", err)
 	}
 
 	// TODO: organize and log events
 	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
+}
+
+// updateDeployment updates the deployment with the desired number of replicas
+func (c *Controller) updateDeployment(namespace string, deploymentName string, replicas *int32) {
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Retrieve the latest version of Deployment before attempting update
+		deployment, getErr := c.deploymentsLister.Deployments(namespace).Get(deploymentName)
+		if errors.IsNotFound(getErr) {
+			return fmt.Errorf("Deployment %s was not found in namespace %s",
+				deploymentName, namespace)
+		}
+		if getErr != nil {
+			klog.Fatalf("Failed to get deployment: %v", getErr)
+		}
+
+		deployment.Spec.Replicas = replicas
+		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(deployment)
+		if updateErr != nil {
+			klog.Fatalf("Failed to update deployment: %v", updateErr)
+		}
+		return updateErr
+	})
+	if retryErr != nil {
+		klog.Fatalf("Failed to update deployment (retry failed): %v", retryErr)
+	}
 }
 
 // getDesiredWorkers finds the desired number of workers which are required
@@ -362,12 +378,12 @@ func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 
 	return desired
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
+func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, availableReplicas int32) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
-	workerPodAutoScalerCopy.Status.CurrentReplicas = deployment.Status.AvailableReplicas
+	workerPodAutoScalerCopy.Status.CurrentReplicas = availableReplicas
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.

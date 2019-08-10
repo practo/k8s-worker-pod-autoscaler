@@ -277,6 +277,7 @@ k8s.io/client-go/kubernetes/typed/core/v1
 k8s.io/client-go/listers/apps/v1
 k8s.io/client-go/tools/cache
 k8s.io/client-go/tools/record
+k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 k8s.io/client-go/discovery
 k8s.io/client-go/util/flowcontrol
@@ -348,7 +349,6 @@ k8s.io/client-go/tools/clientcmd/api/latest
 k8s.io/client-go/util/homedir
 k8s.io/client-go/tools/reference
 k8s.io/client-go/tools/pager
-k8s.io/client-go/util/retry
 k8s.io/client-go/tools/record/util
 k8s.io/client-go/informers/admissionregistration/v1
 k8s.io/client-go/informers/admissionregistration/v1beta1
