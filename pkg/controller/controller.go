@@ -344,7 +344,7 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 }
 
 // getDesiredWorkers finds the desired number of workers which are required
-// test case runs: https://play.golang.org/p/G5YLhylQZ78
+// test case run: https://play.golang.org/p/_dFbbhb1J_8
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
@@ -353,10 +353,24 @@ func (c *Controller) getDesiredWorkers(
 	minWorkers int32,
 	maxWorkers int32) int32 {
 
+	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
 
-	if currentWorkers == 0 || queueMessages > 0 {
-		desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
+	if currentWorkers == 0 {
+		desiredWorkers := int32(math.Ceil(usageRatio))
+		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
+	}
+
+	if queueMessages > 0 {
+		// return the current replicas if the change would be too small
+		if math.Abs(1.0-usageRatio) <= tolerance {
+			return currentWorkers
+		}
+		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
+		// to prevent scaling down of workers which could be doing processing
+		if desiredWorkers < currentWorkers {
+			return currentWorkers
+		}
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
