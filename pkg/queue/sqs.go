@@ -9,6 +9,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -249,8 +250,12 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		// Long polling is done to keep SQS api calls to minimum.
 		messagesReceived, err := s.longPollReceiveMessage(queueSpec.uri)
 		if err != nil {
-			klog.Fatalf("Unable to receive message from queue %q, %v.",
-				queueSpec.name, err)
+			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+				klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+			} else {
+				klog.Fatalf("Unable to receive message from queue %q, %v.",
+					queueSpec.name, err)
+			}
 		}
 
 		s.queues.updateMessage(key, messagesReceived)
