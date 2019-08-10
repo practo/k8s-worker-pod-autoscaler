@@ -308,6 +308,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		desiredWorkers,
 		workerPodAutoScaler,
 		deployment.Status.AvailableReplicas,
+		queueMessages,
 	)
 	if err != nil {
 		klog.Fatalf("Error updating status of worker pod autoscaler: %v", err)
@@ -392,13 +393,19 @@ func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 
 	return desired
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, availableReplicas int32) error {
+func (c *Controller) updateWorkerPodAutoScalerStatus(
+	desiredWorkers int32,
+	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
+	availableReplicas int32,
+	queueMessages int32) error {
+
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
 	workerPodAutoScalerCopy.Status.CurrentReplicas = availableReplicas
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
+	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,

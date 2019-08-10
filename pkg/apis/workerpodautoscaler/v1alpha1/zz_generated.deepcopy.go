@@ -103,11 +103,6 @@ func (in *WorkerPodAutoScalerSpec) DeepCopyInto(out *WorkerPodAutoScalerSpec) {
 		*out = new(int32)
 		**out = **in
 	}
-	if in.Replicas != nil {
-		in, out := &in.Replicas, &out.Replicas
-		*out = new(int32)
-		**out = **in
-	}
 	return
 }
 
