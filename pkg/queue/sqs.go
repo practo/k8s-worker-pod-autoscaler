@@ -240,7 +240,7 @@ func (s *SQS) waitForShortPollInterval() {
 	time.Sleep(s.shortPollInterval)
 }
 
-func (s *SQS) poll(key string, queueSpec *QueueSpec) {
+func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if queueSpec.workers == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
