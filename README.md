@@ -67,8 +67,8 @@ spec:
   minReplicas: 0
   maxReplicas: 10
   targetMessagesPerWorker: 2
-  queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
   deploymentName: example-deployment
+  queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
 ```
 
 ## WPA Controller
@@ -97,7 +97,7 @@ Flags:
 ## Contributing
 It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L8) implementation needs to be written down to make that possible.
 
-- After making code changes, run the below commands dto buid and run it locally. 
+- After making code changes, run the below commands dto buid and run it locally.
 ```
 $ make build
 making bin/darwin_amd64/workerpodautoscaler

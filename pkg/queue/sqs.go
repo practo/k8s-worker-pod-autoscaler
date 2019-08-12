@@ -9,6 +9,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -235,6 +236,10 @@ func (s *SQS) Sync(stopCh <-chan struct{}) {
 	}
 }
 
+func (s *SQS) waitForShortPollInterval() {
+	time.Sleep(s.shortPollInterval)
+}
+
 func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if queueSpec.workers == 0 {
 		s.queues.updateIdleWorkers(key, -1)
@@ -245,9 +250,12 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		// Long polling is done to keep SQS api calls to minimum.
 		messagesReceived, err := s.longPollReceiveMessage(queueSpec.uri)
 		if err != nil {
-			klog.Fatalf("Unable to receive message from queue %q, %v.",
-				queueSpec.name, err)
-			return
+			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+				klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+			} else {
+				klog.Fatalf("Unable to receive message from queue %q, %v.",
+					queueSpec.name, err)
+			}
 		}
 
 		s.queues.updateMessage(key, messagesReceived)
@@ -258,14 +266,13 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if err != nil {
 		klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
-		return
 	}
 	klog.Infof("approxMessages=%d", approxMessages)
 	s.queues.updateMessage(key, approxMessages)
 
 	if approxMessages != 0 {
 		s.queues.updateIdleWorkers(key, -1)
-		time.Sleep(s.shortPollInterval)
+		s.waitForShortPollInterval()
 		return
 	}
 
@@ -276,12 +283,12 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if err != nil {
 		klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
 			queueSpec.name, err)
-		return
 	}
 	klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("approxMessagesNotVisible > 0, ignoring scaling down")
+		s.waitForShortPollInterval()
 		return
 	}
 
@@ -293,7 +300,6 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 	if err != nil {
 		klog.Fatalf("Unable to fetch empty revieve metric for queue %q, %v.",
 			queueSpec.name, err)
-		return
 	}
 
 	var idleWorkers int32
@@ -305,6 +311,6 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 
 	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
 	s.queues.updateIdleWorkers(key, idleWorkers)
-	time.Sleep(s.shortPollInterval)
+	s.waitForShortPollInterval()
 	return
 }

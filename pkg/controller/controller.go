@@ -5,7 +5,6 @@ import (
 	"math"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -17,6 +16,7 @@ import (
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
@@ -256,7 +256,6 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	// Get the deployment with the name specified in WorkerPodAutoScaler.spec
 	deployment, err := c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
-	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
 		return fmt.Errorf("Deployment %s not found in namespace %s",
 			deploymentName, workerPodAutoScaler.Namespace)
@@ -300,19 +299,19 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	klog.Infof("queue: %s, messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
-		deploymentCopy := deployment.DeepCopy()
-		deploymentCopy.Spec.Replicas = &desiredWorkers
-		deployment, err = c.kubeclientset.AppsV1().Deployments(workerPodAutoScaler.Namespace).Update(deploymentCopy)
-		if err != nil {
-			klog.Fatalf("Failed to update deployment: %v", err)
-		}
+		c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
 	}
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(desiredWorkers, workerPodAutoScaler, deployment)
+	err = c.updateWorkerPodAutoScalerStatus(
+		desiredWorkers,
+		workerPodAutoScaler,
+		deployment.Status.AvailableReplicas,
+		queueMessages,
+	)
 	if err != nil {
-		return err
+		klog.Fatalf("Error updating status of worker pod autoscaler: %v", err)
 	}
 
 	// TODO: organize and log events
@@ -320,8 +319,33 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	return nil
 }
 
+// updateDeployment updates the deployment with the desired number of replicas
+func (c *Controller) updateDeployment(namespace string, deploymentName string, replicas *int32) {
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Retrieve the latest version of Deployment before attempting update
+		deployment, getErr := c.deploymentsLister.Deployments(namespace).Get(deploymentName)
+		if errors.IsNotFound(getErr) {
+			return fmt.Errorf("Deployment %s was not found in namespace %s",
+				deploymentName, namespace)
+		}
+		if getErr != nil {
+			klog.Fatalf("Failed to get deployment: %v", getErr)
+		}
+
+		deployment.Spec.Replicas = replicas
+		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(deployment)
+		if updateErr != nil {
+			klog.Fatalf("Failed to update deployment: %v", updateErr)
+		}
+		return updateErr
+	})
+	if retryErr != nil {
+		klog.Fatalf("Failed to update deployment (retry failed): %v", retryErr)
+	}
+}
+
 // getDesiredWorkers finds the desired number of workers which are required
-// test case runs: https://play.golang.org/p/G5YLhylQZ78
+// test case run: https://play.golang.org/p/_dFbbhb1J_8
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
 	targetMessagesPerWorker int32,
@@ -330,10 +354,24 @@ func (c *Controller) getDesiredWorkers(
 	minWorkers int32,
 	maxWorkers int32) int32 {
 
+	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
 
-	if currentWorkers == 0 || queueMessages > 0 {
-		desiredWorkers := int32(math.Ceil(usageRatio + float64(currentWorkers)))
+	if currentWorkers == 0 {
+		desiredWorkers := int32(math.Ceil(usageRatio))
+		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
+	}
+
+	if queueMessages > 0 {
+		// return the current replicas if the change would be too small
+		if math.Abs(1.0-usageRatio) <= tolerance {
+			return currentWorkers
+		}
+		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
+		// to prevent scaling down of workers which could be doing processing
+		if desiredWorkers < currentWorkers {
+			return currentWorkers
+		}
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
@@ -355,13 +393,19 @@ func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 
 	return desired
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(desiredWorkers int32, workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler, deployment *appsv1.Deployment) error {
+func (c *Controller) updateWorkerPodAutoScalerStatus(
+	desiredWorkers int32,
+	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
+	availableReplicas int32,
+	queueMessages int32) error {
+
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
-	workerPodAutoScalerCopy.Status.CurrentReplicas = deployment.Status.AvailableReplicas
+	workerPodAutoScalerCopy.Status.CurrentReplicas = availableReplicas
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
+	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
