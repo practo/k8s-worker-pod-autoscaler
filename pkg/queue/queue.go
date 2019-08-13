@@ -94,7 +94,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				delete(q.item, key)
 			}
 		case listResultCh := <-q.listCh:
-			listResultCh <- q.item
+			listResultCh <- DeepCopyItem(q.item)
 		case <-stopCh:
 			klog.Info("Stopping queue syncer gracefully.")
 			return
@@ -213,4 +213,12 @@ func getQueueName(name string) string {
 
 func getKey(namespace string, name string) string {
 	return namespace + "/" + name
+}
+
+func DeepCopyItem(original map[string]QueueSpec) map[string]QueueSpec {
+	copy := make(map[string]QueueSpec)
+	for key, value := range original {
+		copy[key] = value
+	}
+	return copy
 }
