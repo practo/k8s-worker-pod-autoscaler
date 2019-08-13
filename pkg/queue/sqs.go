@@ -250,8 +250,14 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		// Long polling is done to keep SQS api calls to minimum.
 		messagesReceived, err := s.longPollReceiveMessage(queueSpec.uri)
 		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+			aerr, ok := err.(awserr.Error)
+			if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
 				klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+				return
+			} else if ok && aerr.Code() == "RequestError" {
+				klog.Errorf("Unable to perform request long polling %q, %v.",
+					queueSpec.name, err)
+				return
 			} else {
 				klog.Fatalf("Unable to receive message from queue %q, %v.",
 					queueSpec.name, err)
