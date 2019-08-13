@@ -240,7 +240,7 @@ func (s *SQS) waitForShortPollInterval() {
 	time.Sleep(s.shortPollInterval)
 }
 
-func (s *SQS) poll(key string, queueSpec *QueueSpec) {
+func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if queueSpec.workers == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
@@ -250,8 +250,14 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		// Long polling is done to keep SQS api calls to minimum.
 		messagesReceived, err := s.longPollReceiveMessage(queueSpec.uri)
 		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+			aerr, ok := err.(awserr.Error)
+			if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
 				klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+				return
+			} else if ok && aerr.Code() == "RequestError" {
+				klog.Errorf("Unable to perform request long polling %q, %v.",
+					queueSpec.name, err)
+				return
 			} else {
 				klog.Fatalf("Unable to receive message from queue %q, %v.",
 					queueSpec.name, err)
@@ -267,7 +273,7 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
 	}
-	klog.Infof("approxMessages=%d", approxMessages)
+	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 	s.queues.updateMessage(key, approxMessages)
 
 	if approxMessages != 0 {
@@ -284,10 +290,10 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
 			queueSpec.name, err)
 	}
-	klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {
-		klog.Infof("approxMessagesNotVisible > 0, ignoring scaling down")
+		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
 		s.waitForShortPollInterval()
 		return
 	}
@@ -309,7 +315,12 @@ func (s *SQS) poll(key string, queueSpec *QueueSpec) {
 		idleWorkers = 0
 	}
 
-	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
+	klog.Infof("%s: emptyReceives=%f, workers=%d, idleWorkers=%d",
+		queueSpec.name,
+		emptyReceives,
+		queueSpec.workers,
+		idleWorkers,
+	)
 	s.queues.updateIdleWorkers(key, idleWorkers)
 	s.waitForShortPollInterval()
 	return

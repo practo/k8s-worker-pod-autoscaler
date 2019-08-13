@@ -4,5 +4,5 @@ package queue
 // For example: SQS and Beanstalk implements QueuingService interface
 type QueuingService interface {
 	Sync(stopCh <-chan struct{})
-	poll(key string, queueSpec *QueueSpec)
+	poll(key string, queueSpec QueueSpec)
 }
