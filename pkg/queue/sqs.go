@@ -267,7 +267,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
 	}
-	klog.Infof("approxMessages=%d", approxMessages)
+	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 	s.queues.updateMessage(key, approxMessages)
 
 	if approxMessages != 0 {
@@ -284,10 +284,10 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
 			queueSpec.name, err)
 	}
-	klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {
-		klog.Infof("approxMessagesNotVisible > 0, ignoring scaling down")
+		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
 		s.waitForShortPollInterval()
 		return
 	}
@@ -309,7 +309,12 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		idleWorkers = 0
 	}
 
-	klog.Infof("emptyReceives=%f, workers=%d, idleWorkers=>%d", emptyReceives, queueSpec.workers, idleWorkers)
+	klog.Infof("%s: emptyReceives=%f, workers=%d, idleWorkers=%d",
+		queueSpec.name,
+		emptyReceives,
+		queueSpec.workers,
+		idleWorkers,
+	)
 	s.queues.updateIdleWorkers(key, idleWorkers)
 	s.waitForShortPollInterval()
 	return
