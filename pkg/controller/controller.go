@@ -311,7 +311,14 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		queueMessages,
 	)
 	if err != nil {
-		klog.Fatalf("Error updating status of worker pod autoscaler: %v", err)
+		// TODO: till the api server has https://github.com/kubernetes/kubernetes/pull/72856 fix
+		// ignore this error
+		// this was fixed in 1.13.1 release
+		if err.Error() == "0-length response with status code: 200 and content type" {
+			klog.Errorf("Error updating status of wpa (1.13 apiserver has the fix): %v", err)
+			return nil
+		}
+		klog.Fatalf("Error updating status of wpa: %v", err)
 	}
 
 	// TODO: organize and log events
