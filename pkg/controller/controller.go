@@ -342,7 +342,7 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 		deployment.Spec.Replicas = replicas
 		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(deployment)
 		if updateErr != nil {
-			klog.Fatalf("Failed to update deployment: %v", updateErr)
+			klog.Errorf("Failed to update deployment: %v", updateErr)
 		}
 		return updateErr
 	})
