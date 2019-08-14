@@ -37,11 +37,11 @@ func (p *Poller) isThreadRequired(key string) bool {
 func (p *Poller) runPollThread(key string) {
 	for {
 		if !p.isThreadRequired(key) {
-		        return
+			return
 		}
 		queueSpec := p.queues.ListQueue(key)
 		if queueSpec.name == "" {
-                        return
+			return
 		}
 		p.service.poll(key, queueSpec)
 	}
@@ -90,7 +90,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 			for key, _ := range queues {
 				threads := p.listThreads()
 				if _, ok := threads[key]; !ok {
-				        p.updateThreads(key, true)
+					p.updateThreads(key, true)
 					go p.runPollThread(key)
 				}
 			}
@@ -99,7 +99,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 			for key, _ := range p.listThreads() {
 				if _, ok := queues[key]; !ok {
 					p.updateThreads(key, false)
-                                }
+				}
 			}
 		case <-stopCh:
 			klog.Info("Stopping sqs poller(s) and thread manager gracefully.")
