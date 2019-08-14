@@ -31,7 +31,7 @@ func (p *Poller) isThreadRequired(key string) bool {
 	if _, ok := threads[key]; !ok {
 		return false
 	}
-	return true
+	return threads[key]
 }
 
 func (p *Poller) runPollThread(key string) {
@@ -63,12 +63,11 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case listResultCh := <-p.listThreadCh:
-			listResultCh <- p.threads
+			listResultCh <- DeepCopyThread(p.threads)
 		case threadStatus := <-p.updateThreadCh:
 			for key, status := range threadStatus {
 				if status == false {
 					delete(p.threads, key)
-					return
 				}
 				p.threads[key] = status
 			}
@@ -82,8 +81,6 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 func (p *Poller) Run(stopCh <-chan struct{}) {
 	go p.sync(stopCh)
 
-	klog.Info("Starting sqs poller(s) and thread manager.")
-
 	ticker := time.NewTicker(time.Second * 1)
 	for {
 		select {
@@ -92,8 +89,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 			// Create a new thread
 			for key, _ := range queues {
 				threads := p.listThreads()
-				_, ok := threads[key]
-				if !ok {
+				if _, ok := threads[key]; !ok {
 					p.updateThreads(key, true)
 					go p.runPollThread(key)
 				}
@@ -105,10 +101,17 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 					p.updateThreads(key, false)
 				}
 			}
-
 		case <-stopCh:
 			klog.Info("Stopping sqs poller(s) and thread manager gracefully.")
 			return
 		}
 	}
+}
+
+func DeepCopyThread(original map[string]bool) map[string]bool {
+	copy := make(map[string]bool)
+	for key, value := range original {
+		copy[key] = value
+	}
+	return copy
 }
