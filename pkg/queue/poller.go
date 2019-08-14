@@ -68,7 +68,6 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 			for key, status := range threadStatus {
 				if status == false {
 					delete(p.threads, key)
-                                        return
 				}
 				p.threads[key] = status
 			}
