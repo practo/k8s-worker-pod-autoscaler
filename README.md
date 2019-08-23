@@ -97,7 +97,7 @@ Flags:
 ## Contributing
 It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L8) implementation needs to be written down to make that possible.
 
-- After making code changes, run the below commands dto buid and run it locally.
+- After making code changes, run the below commands to build and run locally.
 ```
 $ make build
 making bin/darwin_amd64/workerpodautoscaler
