@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"time"
+        "strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -314,7 +315,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		// TODO: till the api server has https://github.com/kubernetes/kubernetes/pull/72856 fix
 		// ignore this error
 		// this was fixed in 1.13.1 release
-		if err.Error() == "0-length response with status code: 200 and content type" {
+		if strings.Contains(err.Error(), "0-length response with status code: 200 and content type:") {
 			klog.Errorf("Error updating status of wpa (1.13 apiserver has the fix): %v", err)
 			return nil
 		}
