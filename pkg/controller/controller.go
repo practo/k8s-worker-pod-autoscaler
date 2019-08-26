@@ -388,7 +388,7 @@ func (c *Controller) getDesiredWorkers(
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
-	if idleWorkers != 0 {
+	if idleWorkers > 0 {
 		desiredWorkers := currentWorkers - idleWorkers
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
