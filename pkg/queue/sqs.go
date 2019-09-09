@@ -241,7 +241,7 @@ func (s *SQS) waitForShortPollInterval() {
 }
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
-	if queueSpec.workers == 0 {
+	if queueSpec.workers == 0 && queueSpec.messages == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
 		// If there are no workers running we do a long poll to find a job(s)
