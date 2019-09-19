@@ -94,23 +94,34 @@ Flags:
 ```
 
 
-## Build, Deploy, Release
-- Clone/Pull the latest code
+## Release
+
+- Decide a `tag` and bump up the `tag` [here](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/artifacts/deployment-template.yaml#L26) and create and merge the pull request.
+
+- Get the latest master code.
 ```
 git clone https://github.com/practo/k8s-worker-pod-autoscaler
 cd k8s-worker-pod-autoscaler
 git pull origin master
+
 ```
 
-- Build and push the image to hub.docker.com/practodev (You need practodev push access, to do this)
+- Build and push the image to `hub.docker.com/practodev`. Note: practodev push access is required.
 ```
+git fetch --tags
+git tag v0.2.1
 make push
 ```
 
-- Create a Release in Github and Publish it. (You need admin access in Github repo to do this)
+- Create a Release in Github. Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v0.2.0 and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
+
+-  Publish the release in Github 🎉
+
+- For first time deployment use [this](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/artifacts/deployment-template.yaml).
+
+- For future deployments. Edit the image in deployment with the new `tag`.
 ```
-Example: Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v0.2.0
-Please create the release with Changelog as mentioned here ^
+kubectl edit deployment -n kube-system workerpodautoscaler
 ```
 
 ## Contributing
