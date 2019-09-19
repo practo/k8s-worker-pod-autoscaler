@@ -94,6 +94,36 @@ Flags:
 ```
 
 
+## Release
+
+- Decide a `tag` and bump up the `tag` [here](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/artifacts/deployment-template.yaml#L26) and create and merge the pull request.
+
+- Get the latest master code.
+```
+git clone https://github.com/practo/k8s-worker-pod-autoscaler
+cd k8s-worker-pod-autoscaler
+git pull origin master
+
+```
+
+- Build and push the image to `hub.docker.com/practodev`. Note: practodev push access is required.
+```
+git fetch --tags
+git tag v0.2.1
+make push
+```
+
+- Create a Release in Github. Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v0.2.0 and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
+
+-  Publish the release in Github 🎉
+
+- For first time deployment use [this](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/artifacts/deployment-template.yaml).
+
+- For future deployments. Edit the image in deployment with the new `tag`.
+```
+kubectl edit deployment -n kube-system workerpodautoscaler
+```
+
 ## Contributing
 It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L8) implementation needs to be written down to make that possible.
 
@@ -104,6 +134,7 @@ making bin/darwin_amd64/workerpodautoscaler
 
 $ bin/darwin_amd64/workerpodautoscaler run --kube-config /home/user/.kube/config
 ```
+
 - To add a new dependency use `go mod vendor`
 - Dependency management using go modules - https://github.com/liggitt/gomodules/blob/master/README.md
 - Get up to speed with go in no time - https://gobyexample.com
