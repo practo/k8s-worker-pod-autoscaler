@@ -270,8 +270,18 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
-			queueSpec.name, err)
+		aerr, ok := err.(awserr.Error)
+		if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+			klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+			return
+		} else if ok && aerr.Code() == "RequestError" {
+			klog.Errorf("Unable to perform request get approximate messages %q, %v.",
+				queueSpec.name, err)
+			return
+		} else {
+			klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
+				queueSpec.name, err)
+		}
 	}
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 	s.queues.updateMessage(key, approxMessages)
@@ -287,8 +297,18 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	// do not scale down as those messages are still being processed (and we dont know which worker)
 	approxMessagesNotVisible, err := s.getApproxMessagesNotVisible(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
-			queueSpec.name, err)
+		aerr, ok := err.(awserr.Error)
+		if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
+			klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+			return
+		} else if ok && aerr.Code() == "RequestError" {
+			klog.Errorf("Unable to perform request get approximate messages not visible %q, %v.",
+				queueSpec.name, err)
+			return
+		} else {
+			klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
+				queueSpec.name, err)
+		}
 	}
 	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
@@ -298,13 +318,13 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		return
 	}
 
-	// emptyReceives is querired to find if there are idle workers and scale down to
+	// emptyReceives is queried to find if there are idle workers and scale down to
 	// minimum workers, so scale down.
 	// TODO: Continuously high throughout workers are impacted by this and does not scale down
 	// to a lower value even if it is possible
 	emptyReceives, err := s.cachedNumberOfEmptyReceives(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to fetch empty revieve metric for queue %q, %v.",
+		klog.Fatalf("Unable to fetch empty receive metric for queue %q, %v.",
 			queueSpec.name, err)
 	}
 
