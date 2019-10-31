@@ -23,14 +23,14 @@ spec:
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
        - name: AWS_SECRET_ACCESS_KEY
          value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: practodev/workerpodautoscaler:v0.2.1
+       image: practodev/workerpodautoscaler:v0.2.2
        imagePullPolicy: Always
        command:
        - /workerpodautoscaler
        - run
        - --resync-period=20
        - --wpa-threads=10
-       - --aws-region={{ WPA_AWS_REGION }}
+       - --aws-regions={{ WPA_AWS_REGIONS }}
        - --sqs-short-poll-interval=20
        - --sqs-long-poll-interval=20
        resources:

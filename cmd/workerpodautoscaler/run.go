@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	kubeinformers "k8s.io/client-go/informers"
@@ -46,7 +47,7 @@ func (v *runCmd) new() *cobra.Command {
 	flagNames := []string{
 		"resync-period",
 		"wpa-threads",
-		"aws-region",
+		"aws-regions",
 		"kube-config",
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
@@ -54,7 +55,7 @@ func (v *runCmd) new() *cobra.Command {
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
 	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
-	flags.String("aws-region", "ap-south-1", "aws region of SQS")
+	flags.String("aws-regions", "ap-south-1,ap-southeast-1", "comma separated aws regions of SQS")
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
@@ -69,10 +70,19 @@ func (v *runCmd) new() *cobra.Command {
 	return v.Cmd
 }
 
+func parseRegions(regionNames string) []string {
+	var awsRegions []string
+	regions := strings.Split(regionNames, ",")
+	for _, region := range regions {
+		awsRegions = append(awsRegions, strings.TrimSpace(region))
+	}
+	return awsRegions
+}
+
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	resyncPeriod := time.Second * time.Duration(v.Viper.GetInt("resync-period"))
 	wpaThraeds := v.Viper.GetInt("wpa-threads")
-	awsRegion := v.Viper.GetString("aws-region")
+	awsRegions := parseRegions(v.Viper.GetString("aws-regions"))
 	kubeConfigPath := v.Viper.GetString("kube-config")
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
@@ -110,7 +120,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	go queues.Sync(stopCh)
 
 	// Make all the message service providers and start their pollers
-	sqs, err := queue.NewSQS(awsRegion, queues, shortPollInterval, longPollInterval)
+	sqs, err := queue.NewSQS(awsRegions, queues, shortPollInterval, longPollInterval)
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}

@@ -10,7 +10,7 @@ Currently the supported Message Queueing Services is only AWS SQS. There is a pl
 Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and start the controller. The controller watches over all the specified queues in AWS SQS and scales the Kubernetes deployments based on the specification.
 
 ```bash
-export AWS_REGION='ap-south-1'
+export AWS_REGIONS='ap-south-1,ap-southeast-1'
 export AWS_ACCESS_KEY_ID='sample-aws-access-key-id'
 export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh

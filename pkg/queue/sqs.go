@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/klog"
@@ -18,9 +19,9 @@ import (
 // SQS is used to by the Poller to get the queue
 // information from AWS SQS, it implements the QueuingService interface
 type SQS struct {
-	queues    *Queues
-	sqsClient *sqs.SQS
-	cwClient  *cloudwatch.CloudWatch
+	queues        *Queues
+	sqsClientPool map[string]*sqs.SQS
+	cwClientPool  map[string]*cloudwatch.CloudWatch
 
 	shortPollInterval time.Duration
 	longPollInterval  int64
@@ -35,23 +36,31 @@ type SQS struct {
 }
 
 func NewSQS(
-	awsRegion string,
+	awsRegions []string,
 	queues *Queues,
 	shortPollInterval int,
 	longPollInterval int) (QueuingService, error) {
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(awsRegion)},
-	)
+	sqsClientPool := make(map[string]*sqs.SQS)
+	cwClientPool := make(map[string]*cloudwatch.CloudWatch)
 
-	if err != nil {
-		return nil, err
+	for _, region := range awsRegions {
+		sess, err := session.NewSession(&aws.Config{
+			Region: aws.String(region)},
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		sqsClientPool[region] = sqs.New(sess)
+		cwClientPool[region] = cloudwatch.New(sess)
 	}
 
 	return &SQS{
-		queues:    queues,
-		sqsClient: sqs.New(sess),
-		cwClient:  cloudwatch.New(sess),
+		queues:        queues,
+		sqsClientPool: sqsClientPool,
+		cwClientPool:  cwClientPool,
 
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
@@ -63,8 +72,16 @@ func NewSQS(
 	}, nil
 }
 
+func (s *SQS) getSQSClient(queueURI string) *sqs.SQS {
+	return s.sqsClientPool[getRegion(queueURI)]
+}
+
+func (s *SQS) getCWClient(queueURI string) *cloudwatch.CloudWatch {
+	return s.cwClientPool[getRegion(queueURI)]
+}
+
 func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
-	result, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
+	result, err := s.getSQSClient(queueURI).ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueURI),
 		AttributeNames: aws.StringSlice([]string{
 			"SentTimestamp",
@@ -85,7 +102,7 @@ func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
-	result, err := s.sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
 	})
@@ -109,7 +126,7 @@ func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
-	result, err := s.sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessagesNotVisible")},
 	})
@@ -159,7 +176,7 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 		},
 	}
 
-	result, err := s.cwClient.GetMetricData(&cloudwatch.GetMetricDataInput{
+	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
 		EndTime:           &endTime,
 		StartTime:         &startTime,
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
@@ -344,4 +361,10 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	s.queues.updateIdleWorkers(key, idleWorkers)
 	s.waitForShortPollInterval()
 	return
+}
+
+// TODO: get rid of string parsing
+func getRegion(queueURI string) string {
+	regionDns := strings.Split(queueURI, "/")[2]
+	return strings.Split(regionDns, ".")[1]
 }
