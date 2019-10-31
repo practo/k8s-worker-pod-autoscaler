@@ -84,7 +84,7 @@ Examples:
   workerpodautoscaler run
 
 Flags:
-      --aws-region string             aws region of SQS (default "ap-south-1")
+      --aws-regions string            comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
   -h, --help                          help for run
       --kube-config string            path of the kube config file, if not specified in cluster config is used
       --resync-period int             sync period for the worker pod autoscaler (default 20)
@@ -109,7 +109,7 @@ git pull origin master
 - Build and push the image to `hub.docker.com/practodev`. Note: practodev push access is required.
 ```
 git fetch --tags
-git tag v0.2.1
+git tag v0.2.2
 make push
 ```
 
