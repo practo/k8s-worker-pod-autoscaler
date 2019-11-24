@@ -1,6 +1,8 @@
 # Worker Pod Autoscaler
 
-<img src="/artifacts/images/wpa.svg" width="100">
+[![GoDoc Widget]][GoDoc] [![CI Status](https://api.travis-ci.com/practo/k8s-worker-pod-autoscaler.svg?token=yTs54joHywqVVdshXhPm&branch=master)](https://travis-ci.com/practo/k8s-worker-pod-autoscaler)
+
+<img src="/artifacts/images/worker-pod-autoscaler.png" width="120">
 
 ----
 
@@ -152,3 +154,5 @@ $ bin/darwin_amd64/workerpodautoscaler run --kube-config /home/user/.kube/config
 Thanks to kubernetes team for making [crds](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and [sample controller](https://github.com/kubernetes/sample-controller)
 
 [latest-release]: https://github.com/practo/k8s-worker-pod-autoscaler/releases
+[GoDoc]: https://godoc.org/github.com/practo/k8s-worker-pod-autoscaler
+[GoDoc Widget]: https://godoc.org/github.com/practo/k8s-worker-pod-autoscaler?status.svg
