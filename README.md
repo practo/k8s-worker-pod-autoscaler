@@ -1,8 +1,14 @@
 # Worker Pod Autoscaler
 
+<img src="/artifacts/images/wpa.svg" width="100">
+
+----
+
 Scale kubernetes pods based on the Queue length of a queue in a Message Queueing Service. Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length.
 
 Currently the supported Message Queueing Services is only AWS SQS. There is a plan to integrate other commonly used message queing services.
+
+----
 
 # Install the WorkerPodAutoscaler
 
