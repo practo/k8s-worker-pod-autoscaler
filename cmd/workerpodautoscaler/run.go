@@ -124,10 +124,21 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}
+	bs, err := queue.NewBeanstalk(queues, shortPollInterval, longPollInterval)
+	if err != nil {
+		klog.Fatalf("Error creating bs Poller: %v", err)
+	}
 	go sqs.Sync(stopCh)
+	go bs.Sync(stopCh)
 
 	sqsPoller := queue.NewPoller(queues, sqs)
+	bsPoller := queue.NewPoller(queues, bs)
+
 	for _, poller := range []queue.Poller{sqsPoller} {
+		go poller.Run(stopCh)
+	}
+
+	for _, poller := range []queue.Poller{bsPoller} {
 		go poller.Run(stopCh)
 	}
 
