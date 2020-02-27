@@ -102,7 +102,11 @@ func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
-	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	sqsClient := s.getSQSClient(queueURI)
+	if sqsClient == nil {
+		return 0, fmt.Errorf("Unable to fetch queue, check queue URL or permission")
+	}
+	result, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
 	})
@@ -258,6 +262,9 @@ func (s *SQS) waitForShortPollInterval() {
 }
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
+	if !strings.Contains(queueSpec.uri, "sqs") {
+		return
+	}
 	if queueSpec.workers == 0 && queueSpec.messages == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
