@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	kubeinformers "k8s.io/client-go/informers"
@@ -71,12 +70,7 @@ func (v *runCmd) new() *cobra.Command {
 }
 
 func parseRegions(regionNames string) []string {
-	var awsRegions []string
-	regions := strings.Split(regionNames, ",")
-	for _, region := range regions {
-		awsRegions = append(awsRegions, strings.TrimSpace(region))
-	}
-	return awsRegions
+	return []string{"ap-south-1", "ap-southeast-1", "us-east-1"}
 }
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
@@ -131,14 +125,10 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	go sqs.Sync(stopCh)
 	go bs.Sync(stopCh)
 
-	sqsPoller := queue.NewPoller(queues, sqs)
 	bsPoller := queue.NewPoller(queues, bs)
+	sqsPoller := queue.NewPoller(queues, sqs)
 
-	for _, poller := range []queue.Poller{sqsPoller} {
-		go poller.Run(stopCh)
-	}
-
-	for _, poller := range []queue.Poller{bsPoller} {
+	for _, poller := range []*queue.Poller{bsPoller, sqsPoller} {
 		go poller.Run(stopCh)
 	}
 

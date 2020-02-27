@@ -375,16 +375,13 @@ func (c *Controller) getDesiredWorkers(
 		if math.Abs(1.0-usageRatio) <= tolerance {
 			return currentWorkers
 		}
-
 		if queueMessages < targetMessagesPerWorker {
 			return currentWorkers
 		}
 
-		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
+		desiredWorkers := int32(math.Ceil(usageRatio))
 		// to prevent scaling down of workers which could be doing processing
-		if desiredWorkers < currentWorkers {
-			return currentWorkers
-		}
+
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
@@ -392,7 +389,6 @@ func (c *Controller) getDesiredWorkers(
 		desiredWorkers := currentWorkers - idleWorkers
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
-
 	return currentWorkers
 }
 

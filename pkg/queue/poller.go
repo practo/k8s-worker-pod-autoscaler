@@ -16,8 +16,8 @@ type Poller struct {
 	updateThreadCh chan map[string]bool
 }
 
-func NewPoller(queues *Queues, service QueuingService) Poller {
-	return Poller{
+func NewPoller(queues *Queues, service QueuingService) *Poller {
+	return &Poller{
 		queues:         queues,
 		service:        service,
 		threads:        make(map[string]bool),
@@ -72,7 +72,7 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 				p.threads[key] = status
 			}
 		case <-stopCh:
-			klog.Info("Stopping sync thread of sqs poller gracefully.")
+			klog.Info("Stopping sync thread of poller gracefully.")
 			return
 		}
 	}
@@ -102,7 +102,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 				}
 			}
 		case <-stopCh:
-			klog.Info("Stopping sqs poller(s) and thread manager gracefully.")
+			klog.Info("Stopping poller(s) and thread manager gracefully.")
 			return
 		}
 	}

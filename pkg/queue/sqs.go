@@ -52,7 +52,7 @@ func NewSQS(
 		if err != nil {
 			return nil, err
 		}
-
+		klog.Error("Region: ", region)
 		sqsClientPool[region] = sqs.New(sess)
 		cwClientPool[region] = cloudwatch.New(sess)
 	}
@@ -81,7 +81,11 @@ func (s *SQS) getCWClient(queueURI string) *cloudwatch.CloudWatch {
 }
 
 func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
-	result, err := s.getSQSClient(queueURI).ReceiveMessage(&sqs.ReceiveMessageInput{
+	sqsClient := s.getSQSClient(queueURI)
+	if sqsClient == nil {
+		return 0, fmt.Errorf("Unable to fetch queue, check queue URL or permission")
+	}
+	result, err := sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueURI),
 		AttributeNames: aws.StringSlice([]string{
 			"SentTimestamp",
@@ -130,7 +134,11 @@ func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
-	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	sqsClient := s.getSQSClient(queueURI)
+	if sqsClient == nil {
+		return 0, fmt.Errorf("Unable to fetch queue, check queue URL or permission")
+	}
+	result, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessagesNotVisible")},
 	})
@@ -180,7 +188,11 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 		},
 	}
 
-	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
+	cwClient := s.getCWClient(queueURI)
+	if cwClient == nil {
+		return 0, fmt.Errorf("Unable to fetch CloudWatch metric, check URL or permission")
+	}
+	result, err := cwClient.GetMetricData(&cloudwatch.GetMetricDataInput{
 		EndTime:           &endTime,
 		StartTime:         &startTime,
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
@@ -263,6 +275,7 @@ func (s *SQS) waitForShortPollInterval() {
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if !strings.Contains(queueSpec.uri, "sqs") {
+
 		return
 	}
 	if queueSpec.workers == 0 && queueSpec.messages == 0 {
@@ -283,7 +296,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 					queueSpec.name, err)
 				return
 			} else {
-				klog.Fatalf("Unable to receive message from queue %q, %v.",
+				klog.Errorf("Unable to receive message from queue %q, %v.",
 					queueSpec.name, err)
 			}
 		}
@@ -303,7 +316,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 				queueSpec.name, err)
 			return
 		} else {
-			klog.Fatalf("Unable to get approximate messages in queue %q, %v.",
+			klog.Errorf("Unable to get approximate messages in queue %q, %v.",
 				queueSpec.name, err)
 		}
 	}
@@ -330,7 +343,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 				queueSpec.name, err)
 			return
 		} else {
-			klog.Fatalf("Unable to get approximate messages not visible in queue %q, %v.",
+			klog.Errorf("Unable to get approximate messages not visible in queue %q, %v.",
 				queueSpec.name, err)
 		}
 	}
@@ -348,7 +361,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	// to a lower value even if it is possible
 	emptyReceives, err := s.cachedNumberOfEmptyReceives(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to fetch empty receive metric for queue %q, %v.",
+		klog.Errorf("Unable to fetch empty receive metric for queue %q, %v.",
 			queueSpec.name, err)
 	}
 
