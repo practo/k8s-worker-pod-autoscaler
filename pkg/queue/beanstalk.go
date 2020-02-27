@@ -57,8 +57,9 @@ func (b *Beanstalk) getBeanstalkClient(queueURI string) (*beanstalkd.BeanstalkdC
 	return b.bsClientPool[queueURI], nil
 }
 
-func getTubeName(queueURI string) string {
-	return "test"
+func getTubeName(uri string) string {
+	splitted := strings.Split(uri, "|")
+	return splitted[1]
 }
 
 func getHostFromURI(uri string) string {
@@ -84,10 +85,34 @@ func (b *Beanstalk) receiveQueueLength(queueURI string) (int32, error) {
 	if err != nil {
 		return queueLength, err
 	}
+	reservedJobs, err := strconv.Atoi(stats["current-jobs-reserved"])
+	if err != nil {
+		return queueLength, err
+	}
 
-	queueLength = int32(delayedJobs + readyJobs)
+	queueLength = int32(delayedJobs + readyJobs + reservedJobs)
 
 	return queueLength, nil
+}
+
+func (b *Beanstalk) listAllCache() map[string]float64 {
+	cacheResultCh := make(chan map[string]float64)
+	b.cacheListCh <- cacheResultCh
+	return <-cacheResultCh
+}
+
+func (b *Beanstalk) getCache(queueURI string) (float64, bool) {
+	allCache := b.listAllCache()
+	if cache, ok := allCache[queueURI]; ok {
+		return cache, true
+	}
+	return 0.0, false
+}
+
+func (b *Beanstalk) updateCache(key string, cache float64) {
+	b.cacheUpdateCh <- map[string]float64{
+		key: cache,
+	}
 }
 
 func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
@@ -101,7 +126,7 @@ func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
 		case cacheResultCh := <-b.cacheListCh:
 			cacheResultCh <- b.cache
 		case <-stopCh:
-			klog.Info("Stopping sqs syncer gracefully.")
+			klog.Info("Stopping beanstalk syncer gracefully.")
 			return
 		}
 	}
@@ -109,17 +134,19 @@ func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
 
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	if !strings.Contains(queueSpec.uri, "bs") {
+
 		return
 	}
 	messagesReceived := int32(-1)
 	messagesReceived, err := b.receiveQueueLength(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+		b.queues.updateIdleWorkers(key, int32(1))
 	}
 
 	b.queues.updateMessage(key, messagesReceived)
-	b.queues.updateIdleWorkers(key, messagesReceived)
-	klog.Infof("Waitiing for 3 sec: ", key, messagesReceived)
+	b.queues.updateIdleWorkers(key, int32(1))
+	//klog.Infof("Waitiing for 3 sec: ", key, messagesReceived)
 	time.Sleep(3 * time.Second)
 	return
 }
