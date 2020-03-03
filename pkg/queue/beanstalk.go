@@ -15,8 +15,7 @@ type Beanstalk struct {
 	queues       *Queues
 	bsClientPool map[string]*beanstalkd.BeanstalkdClient
 
-	shortPollInterval time.Duration
-	longPollInterval  int64
+	pollInterval int64
 
 	// cache the numberOfEmptyReceives as it is refreshed
 	// in aws every 5minutes - save un-necessary api calls
@@ -29,15 +28,13 @@ type Beanstalk struct {
 
 func NewBeanstalk(
 	queues *Queues,
-	shortPollInterval int,
-	longPollInterval int) (QueuingService, error) {
+	pollInterval int) (QueuingService, error) {
 
 	return &Beanstalk{
 		queues:       queues,
 		bsClientPool: make(map[string]*beanstalkd.BeanstalkdClient),
 
-		shortPollInterval: time.Second * time.Duration(shortPollInterval),
-		longPollInterval:  int64(longPollInterval),
+		pollInterval: int64(pollInterval),
 
 		cache:         make(map[string]float64),
 		cacheValidity: time.Second * time.Duration(300),
@@ -146,7 +143,8 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 
 	b.queues.updateMessage(key, messagesReceived)
 	b.queues.updateIdleWorkers(key, int32(1))
-	//klog.Infof("Waitiing for 3 sec: ", key, messagesReceived)
-	time.Sleep(3 * time.Second)
+	//klog.Infof("Waiting for 3 sec: ", key, messagesReceived)
+
+	time.Sleep(time.Duration(b.pollInterval) * time.Second)
 	return
 }

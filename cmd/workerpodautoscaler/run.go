@@ -58,7 +58,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
-
+	flags.Int("beanstalk-poll-interval", 3, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
 	for _, flagName := range flagNames {
 		if err := v.BindFlag(flagName); err != nil {
 			fmt.Println(err)
@@ -80,7 +80,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeConfigPath := v.Viper.GetString("kube-config")
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
-
+	beanstalkPollInterval := v.Viper.GetInt("beanstalk-poll-interval")
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
@@ -118,7 +118,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}
-	bs, err := queue.NewBeanstalk(queues, shortPollInterval, longPollInterval)
+	bs, err := queue.NewBeanstalk(queues, beanstalkPollInterval)
 	if err != nil {
 		klog.Fatalf("Error creating bs Poller: %v", err)
 	}
