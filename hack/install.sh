@@ -8,8 +8,8 @@ clusterrolebinding='./artifacts/clusterrolebinding.yaml'
 new_deployment='./artifacts/deployment.yaml'
 template_deployment='./artifacts/deployment-template.yaml'
 
-if [ -z "${AWS_REGION}" ]; then
-    echo "AWS_REGION not set in environment, exiting"
+if [ -z "${AWS_REGIONS}" ]; then
+    echo "AWS_REGIONS not set in environment, exiting"
     exit 1
 fi
 if [ -z "${AWS_ACCESS_KEY_ID}" ]; then
