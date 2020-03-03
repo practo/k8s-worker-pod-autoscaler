@@ -38,7 +38,7 @@ Do install the controller before going with the example.
 
 - Create Deployment that needs to scale based on queue length.
 ```bash
-kubectl create -f artificats/examples/example-deployment.yaml
+kubectl create -f artifacts/examples/example-deployment.yaml
 ```
 
 - Create `WPA object (example-wpa)` that will start scaling the `example-deployment` based on SQS queue length.

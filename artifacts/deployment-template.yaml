@@ -1,10 +1,15 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1 
 kind: Deployment
 metadata:
  name: workerpodautoscaler
  namespace: kube-system
+ labels:
+   app: workerpodautoscaler
 spec:
  replicas: 1
+ selector:
+   matchLabels:
+     app: workerpodautoscaler
  template:
    metadata:
      labels:
