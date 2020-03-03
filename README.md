@@ -38,17 +38,19 @@ Do install the controller before going with the example.
 
 - Create Deployment that needs to scale based on queue length.
 ```bash
-kubectl create -f artificats/example-deployment.yaml
+kubectl create -f artificats/examples/example-deployment.yaml
 ```
 
 - Create `WPA object (example-wpa)` that will start scaling the `example-deployment` based on SQS queue length.
 ```bash
-kubectl create -f artifacts/example-wpa.yaml
+kubectl create -f artifacts/examples/example-wpa.yaml
 ```
 
 This will start scaling `example-deployment` based on SQS queue length.
 
 # Why make a separate autoscaler CRD ?
+
+Go through [this medium post](https://medium.com/practo-engineering/launching-worker-pod-autoscaler-3f6079728e8b) for details.
 
 Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. Before making this we were using HPA to scale our worker pods. Below are the reasons for moving away from HPA and making a custom resource:
 
