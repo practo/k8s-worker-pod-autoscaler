@@ -3,7 +3,7 @@ module github.com/practo/k8s-worker-pod-autoscaler
 go 1.12
 
 require (
-	github.com/aws/aws-sdk-go v1.21.8
+	github.com/aws/aws-sdk-go v1.29.15
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3
