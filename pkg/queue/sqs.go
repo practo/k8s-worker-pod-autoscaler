@@ -52,7 +52,6 @@ func NewSQS(
 		if err != nil {
 			return nil, err
 		}
-		klog.Error("Region: ", region)
 		sqsClientPool[region] = sqs.New(sess)
 		cwClientPool[region] = cloudwatch.New(sess)
 	}
