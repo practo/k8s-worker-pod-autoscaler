@@ -370,7 +370,7 @@ func (c *Controller) getDesiredWorkers(
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	}
 
-	if queueMessages > 0 {
+	if queueMessages > 0 && idleWorkers <= 0 {
 		// return the current replicas if the change would be too small
 		if math.Abs(1.0-usageRatio) <= tolerance {
 			return currentWorkers

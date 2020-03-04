@@ -322,12 +322,6 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 	s.queues.updateMessage(key, approxMessages)
 
-	if approxMessages != 0 {
-		s.queues.updateIdleWorkers(key, -1)
-		s.waitForShortPollInterval()
-		return
-	}
-
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
 	// do not scale down as those messages are still being processed (and we dont know which worker)
@@ -350,8 +344,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
-		s.waitForShortPollInterval()
-		return
+		s.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 	}
 
 	// emptyReceives is queried to find if there are idle workers and scale down to
@@ -365,7 +358,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	}
 
 	var idleWorkers int32
-	if emptyReceives == 1.0 {
+	if emptyReceives == 1.0 && approxMessagesNotVisible <= 0 {
 		idleWorkers = queueSpec.workers
 	} else {
 		idleWorkers = 0
