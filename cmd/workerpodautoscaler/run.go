@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	kubeinformers "k8s.io/client-go/informers"
@@ -50,6 +51,7 @@ func (v *runCmd) new() *cobra.Command {
 		"kube-config",
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
+		"beanstalk-poll-interval",
 	}
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
@@ -70,7 +72,12 @@ func (v *runCmd) new() *cobra.Command {
 }
 
 func parseRegions(regionNames string) []string {
-	return []string{"ap-south-1", "ap-southeast-1", "us-east-1"}
+	var awsRegions []string
+	regions := strings.Split(regionNames, ",")
+	for _, region := range regions {
+		awsRegions = append(awsRegions, strings.TrimSpace(region))
+	}
+	return awsRegions
 }
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
@@ -81,6 +88,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
 	beanstalkPollInterval := v.Viper.GetInt("beanstalk-poll-interval")
+
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 

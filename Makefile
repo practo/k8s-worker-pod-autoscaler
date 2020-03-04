@@ -5,7 +5,7 @@ BIN := workerpodautoscaler
 UNIQUE:=$(shell date +%s)
 
 # Where to push the docker image.
-REGISTRY := exotelorg
+REGISTRY := practodev
 
 # This version-strategy uses git tags to set the version string
 VERSION := $(shell git describe --tags --always --dirty)

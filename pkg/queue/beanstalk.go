@@ -15,7 +15,7 @@ type Beanstalk struct {
 	queues       *Queues
 	bsClientPool map[string]*beanstalkd.BeanstalkdClient
 
-	pollInterval int64
+	pollInterval int
 
 	// cache the numberOfEmptyReceives as it is refreshed
 	// in aws every 5minutes - save un-necessary api calls
@@ -34,7 +34,7 @@ func NewBeanstalk(
 		queues:       queues,
 		bsClientPool: make(map[string]*beanstalkd.BeanstalkdClient),
 
-		pollInterval: int64(pollInterval),
+		pollInterval: pollInterval,
 
 		cache:         make(map[string]float64),
 		cacheValidity: time.Second * time.Duration(300),
@@ -130,6 +130,7 @@ func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
 }
 
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
+	idleWorkers := 0
 	if !strings.Contains(queueSpec.uri, "bs") {
 
 		return
@@ -138,12 +139,17 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	messagesReceived, err := b.receiveQueueLength(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
-		b.queues.updateIdleWorkers(key, int32(1))
+
+	}
+
+	if messagesReceived == 0 || messagesReceived < queueSpec.workers {
+		idleWorkers = 1
+	} else if queueSpec.workers == 0 {
+		idleWorkers = 0
 	}
 
 	b.queues.updateMessage(key, messagesReceived)
-	b.queues.updateIdleWorkers(key, int32(1))
-	//klog.Infof("Waiting for 3 sec: ", key, messagesReceived)
+	b.queues.updateIdleWorkers(key, int32(idleWorkers))
 
 	time.Sleep(time.Duration(b.pollInterval) * time.Second)
 	return
