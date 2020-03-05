@@ -33,6 +33,11 @@ var (
 	runExample = `  workerpodautoscaler run`
 )
 
+const (
+	sqsQueueService       = "sqs"
+	beanstalkQueueService = "beanstalkd"
+)
+
 func (v *runCmd) new() *cobra.Command {
 	v.Init("workerpodautoscaler", &cobra.Command{
 		Use:     "run",
@@ -52,6 +57,7 @@ func (v *runCmd) new() *cobra.Command {
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
 		"beanstalk-poll-interval",
+		"queue-services",
 	}
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
@@ -61,6 +67,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
 	flags.Int("beanstalk-poll-interval", 3, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
+	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
 	for _, flagName := range flagNames {
 		if err := v.BindFlag(flagName); err != nil {
 			fmt.Println(err)
@@ -88,6 +95,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
 	beanstalkPollInterval := v.Viper.GetInt("beanstalk-poll-interval")
+	queueServicesToStartWith := v.Viper.GetString("queue-services")
 
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
@@ -121,22 +129,33 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	queues := queue.NewQueues()
 	go queues.Sync(stopCh)
 
+	var queuingServices []queue.QueuingService
+
 	// Make all the message service providers and start their pollers
-	sqs, err := queue.NewSQS(awsRegions, queues, shortPollInterval, longPollInterval)
-	if err != nil {
-		klog.Fatalf("Error creating sqs Poller: %v", err)
-	}
-	bs, err := queue.NewBeanstalk(queues, beanstalkPollInterval)
-	if err != nil {
-		klog.Fatalf("Error creating bs Poller: %v", err)
-	}
-	go sqs.Sync(stopCh)
-	go bs.Sync(stopCh)
+	for _, q := range strings.Split(queueServicesToStartWith, ",") {
+		switch q {
+		case sqsQueueService:
+			sqs, err := queue.NewSQS(awsRegions, queues, shortPollInterval, longPollInterval)
+			if err != nil {
+				klog.Fatalf("Error creating sqs Poller: %v", err)
+			}
 
-	bsPoller := queue.NewPoller(queues, bs)
-	sqsPoller := queue.NewPoller(queues, sqs)
+			queuingServices = append(queuingServices, sqs)
+		case beanstalkQueueService:
+			bs, err := queue.NewBeanstalk(queues, beanstalkPollInterval)
+			if err != nil {
+				klog.Fatalf("Error creating bs Poller: %v", err)
+			}
 
-	for _, poller := range []*queue.Poller{bsPoller, sqsPoller} {
+			queuingServices = append(queuingServices, bs)
+		default:
+			klog.Fatal("Unsupported queue provider: ", q)
+		}
+	}
+
+	for _, service := range queuingServices {
+		go service.Sync(stopCh)
+		poller := queue.NewPoller(queues, service)
 		go poller.Run(stopCh)
 	}
 
