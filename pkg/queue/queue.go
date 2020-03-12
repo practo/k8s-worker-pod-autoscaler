@@ -179,11 +179,6 @@ func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, int
 }
 
 func parseQueueURI(uri string) (string, string, error) {
-
-	if strings.Contains(uri, "bs") {
-		return BenanstalkProtocol, uri, nil
-	}
-
 	parsedURI, err := url.Parse(uri)
 	if err != nil {
 		return "", "", err
@@ -212,15 +207,8 @@ func getProvider(host string, protocol string) (bool, string, error) {
 }
 
 func getQueueName(name string) string {
-	queueName := ""
-	if strings.Contains(name, "sqs") {
-		splitted := strings.Split(name, "/")
-		queueName = splitted[len(splitted)-1]
-	} else if strings.Contains(name, "bs") {
-		splitted := strings.Split(name, "|")
-		queueName = splitted[1]
-	}
-	return queueName
+	splitted := strings.Split(name, "/")
+	return splitted[len(splitted)-1]
 }
 
 func getKey(namespace string, name string) string {
