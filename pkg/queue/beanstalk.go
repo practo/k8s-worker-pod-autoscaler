@@ -1,8 +1,9 @@
 package queue
 
 import (
+	"net/url"
+	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mpdroog/beanstalkd"
@@ -45,7 +46,19 @@ func NewBeanstalk(
 
 func (b *Beanstalk) getBeanstalkClient(queueURI string) (*beanstalkd.BeanstalkdClient, error) {
 	if b.bsClientPool[queueURI] == nil {
-		bsConn, err := beanstalkd.Dial(getHostFromURI(queueURI))
+		var host, port string
+
+		parsedURI, err := url.Parse(queueURI)
+		if err != nil {
+			return nil, err
+		}
+		if host = parsedURI.Hostname(); host == "" {
+			host = "localhost"
+		}
+		if port = parsedURI.Port(); port == "" {
+			port = "11300"
+		}
+		bsConn, err := beanstalkd.Dial(host + ":" + port)
 		if err != nil {
 			return nil, err
 		}
@@ -54,23 +67,13 @@ func (b *Beanstalk) getBeanstalkClient(queueURI string) (*beanstalkd.BeanstalkdC
 	return b.bsClientPool[queueURI], nil
 }
 
-func getTubeName(uri string) string {
-	splitted := strings.Split(uri, "|")
-	return splitted[1]
-}
-
-func getHostFromURI(uri string) string {
-	splitted := strings.Split(uri, "|")
-	return splitted[2] + ":" + splitted[3]
-}
-
 func (b *Beanstalk) receiveQueueLength(queueURI string) (int32, error) {
 	queueLength := int32(0)
 	bsConn, err := b.getBeanstalkClient(queueURI)
 	if err != nil {
 		return queueLength, err
 	}
-	stats, err := bsConn.StatsTube(getTubeName(queueURI))
+	stats, err := bsConn.StatsTube(path.Base(queueURI))
 	if err != nil {
 		return queueLength, err
 	}
@@ -131,10 +134,6 @@ func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
 
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	idleWorkers := 0
-	if !strings.Contains(queueSpec.uri, "bs") {
-
-		return
-	}
 	messagesReceived := int32(-1)
 	messagesReceived, err := b.receiveQueueLength(queueSpec.uri)
 	if err != nil {
