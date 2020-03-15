@@ -63,6 +63,7 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case listResultCh := <-p.listThreadCh:
+			time.Sleep(1 * time.Second)
 			listResultCh <- DeepCopyThread(p.threads)
 		case threadStatus := <-p.updateThreadCh:
 			for key, status := range threadStatus {
