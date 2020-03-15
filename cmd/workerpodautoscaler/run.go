@@ -33,11 +33,6 @@ var (
 	runExample = `  workerpodautoscaler run`
 )
 
-const (
-	sqsQueueService       = "sqs"
-	beanstalkQueueService = "beanstalkd"
-)
-
 func (v *runCmd) new() *cobra.Command {
 	v.Init("workerpodautoscaler", &cobra.Command{
 		Use:     "run",
@@ -134,14 +129,14 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	// Make all the message service providers and start their pollers
 	for _, q := range strings.Split(queueServicesToStartWith, ",") {
 		switch q {
-		case sqsQueueService:
+		case queue.SqsQueueService:
 			sqs, err := queue.NewSQS(awsRegions, queues, shortPollInterval, longPollInterval)
 			if err != nil {
 				klog.Fatalf("Error creating sqs Poller: %v", err)
 			}
 
 			queuingServices = append(queuingServices, sqs)
-		case beanstalkQueueService:
+		case queue.BeanstalkQueueService:
 			bs, err := queue.NewBeanstalk(queues, beanstalkPollInterval)
 			if err != nil {
 				klog.Fatalf("Error creating bs Poller: %v", err)

@@ -135,7 +135,7 @@ func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
 	sqsClient := s.getSQSClient(queueURI)
 	if sqsClient == nil {
-		return 0, fmt.Errorf("Unable to fetch queue, check queue URL or permission")
+		return 0, fmt.Errorf("Unable to make sqs client, check queue URL or permission")
 	}
 	result, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
