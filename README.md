@@ -8,7 +8,7 @@
 
 Scale kubernetes pods based on the Queue length of a queue in a Message Queueing Service. Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length.
 
-Currently the supported Message Queueing Services is only AWS SQS. There is a plan to integrate other commonly used message queing services.
+Currently the supported Message Queueing Services are only AWS SQS and Beanstalkd. There is a plan to integrate other commonly used message queing services.
 
 ----
 
@@ -67,7 +67,7 @@ Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. B
 ## Configuration
 
 ## WPA Resource
-
+### For SQS
 ```yaml
 apiVersion: k8s.practo.dev/v1alpha1
 kind: WorkerPodAutoScaler
@@ -79,6 +79,19 @@ spec:
   targetMessagesPerWorker: 2
   deploymentName: example-deployment
   queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
+```
+### For Beanstalk
+```yaml
+apiVersion: k8s.practo.dev/v1alpha1
+kind: WorkerPodAutoScaler
+metadata:
+  name: example-wpa
+spec:
+  minReplicas: 0
+  maxReplicas: 10
+  targetMessagesPerWorker: 2
+  deploymentName: example-deployment
+  queueURI: beanstalk://127.0.0.1:11300/test-tube
 ```
 
 ## WPA Controller
@@ -95,8 +108,10 @@ Examples:
 
 Flags:
       --aws-regions string            comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
+      --beanstalk-poll-interval int   the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive (default 3)
   -h, --help                          help for run
       --kube-config string            path of the kube config file, if not specified in cluster config is used
+      --queue-services string         comma separated queue services, the WPA will start with (default "sqs,beanstalkd")
       --resync-period int             sync period for the worker pod autoscaler (default 20)
       --sqs-long-poll-interval int    the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
       --sqs-short-poll-interval int   the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
