@@ -296,7 +296,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
-		*workerPodAutoScaler.Spec.Idempotent,
+		workerPodAutoScaler.Spec.Idempotent,
 	)
 	klog.Infof("%s: messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
