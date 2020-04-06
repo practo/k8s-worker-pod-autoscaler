@@ -79,7 +79,10 @@ spec:
   targetMessagesPerWorker: 2
   deploymentName: example-deployment
   queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
+  idempotent: false
 ```
+
+**Note:** idempotent flag specfies the worker is idempotent. WPA scales down to only minimum when a worker is not idempotent. When a worker is indempotent it can scale down to a value greater than minimum also since the worker is idempotent and can take the disruption caused due to scale down. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50).
 
 ## WPA Controller
 
