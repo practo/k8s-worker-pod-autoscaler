@@ -23,6 +23,7 @@ type WorkerPodAutoScalerSpec struct {
 	QueueURI                string `json:"queueURI"`
 	DeploymentName          string `json:"deploymentName"`
 	TargetMessagesPerWorker *int32 `json:"targetMessagesPerWorker"`
+	Idempotent              bool   `json:"idempotent"`
 }
 
 // WorkerPodAutoScalerStatus is the status for a WorkerPodAutoScaler resource
