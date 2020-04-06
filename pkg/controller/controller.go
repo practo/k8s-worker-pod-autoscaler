@@ -296,7 +296,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
-		workerPodAutoScaler.Spec.Idempotent,
+		workerPodAutoScaler.Spec.Disruptable,
 	)
 	klog.Infof("%s: messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
@@ -362,7 +362,7 @@ func (c *Controller) getDesiredWorkers(
 	idleWorkers int32,
 	minWorkers int32,
 	maxWorkers int32,
-	idempotent bool) int32 {
+	disruptable bool) int32 {
 
 	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
@@ -383,7 +383,7 @@ func (c *Controller) getDesiredWorkers(
 		}
 
 		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
-		if !idempotent && desiredWorkers < currentWorkers {
+		if !disruptable && desiredWorkers < currentWorkers {
 			return currentWorkers
 		}
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
