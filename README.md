@@ -79,7 +79,10 @@ spec:
   targetMessagesPerWorker: 2
   deploymentName: example-deployment
   queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
+  disruptable: false
 ```
+
+**Note:** `disruptable` flag specifies the worker can tolerate the disruption due to scale down. WPA scales down to only minimum when a worker is not disruptable and when a worker is disruptable it can scale down to a value greater than minimum. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50).
 
 ## WPA Controller
 
