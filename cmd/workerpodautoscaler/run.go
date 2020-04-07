@@ -124,7 +124,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error creating sqs Poller: %v", err)
 	}
-	go sqs.Sync(stopCh)
 
 	sqsPoller := queue.NewPoller(queues, sqs)
 	for _, poller := range []queue.Poller{sqsPoller} {
