@@ -178,7 +178,11 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 	}
 
 	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
-		return *result.MetricDataResults[0].Values[0], nil
+		var sum float64
+		for i := 0; i < len(result.MetricDataResults[0].Values); i++ {
+			sum += *result.MetricDataResults[0].Values[i]
+		}
+		return sum, nil
 	}
 
 	klog.Errorf("NumberOfMessagesReceived Cloudwatch API returned empty result for uri: %q", queueURI)
