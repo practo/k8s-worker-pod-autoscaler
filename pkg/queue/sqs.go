@@ -25,14 +25,6 @@ type SQS struct {
 
 	shortPollInterval time.Duration
 	longPollInterval  int64
-
-	// cache the numberOfEmptyReceives as it is refreshed
-	// in aws every 5minutes - save un-necessary api calls
-	cache               map[string]float64
-	cacheValidity       time.Duration
-	cacheListCh         chan chan map[string]float64
-	cacheUpdateCh       chan map[string]float64
-	lastCachedTimestamp int64
 }
 
 func NewSQS(
@@ -64,11 +56,6 @@ func NewSQS(
 
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
-
-		cache:         make(map[string]float64),
-		cacheValidity: time.Second * time.Duration(300),
-		cacheListCh:   make(chan chan map[string]float64),
-		cacheUpdateCh: make(chan map[string]float64),
 	}, nil
 }
 
@@ -149,9 +136,9 @@ func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
 	return int32(i64), nil
 }
 
-func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
-	period := int64(300)
-	duration, err := time.ParseDuration("-5m")
+func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
+	period := int64(60)
+	duration, err := time.ParseDuration("-10m")
 	if err != nil {
 		return 0.0, err
 	}
@@ -163,7 +150,7 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 		MetricStat: &cloudwatch.MetricStat{
 			Metric: &cloudwatch.Metric{
 				Namespace:  aws.String("AWS/SQS"),
-				MetricName: aws.String("NumberOfEmptyReceives"),
+				MetricName: aws.String("NumberOfMessagesReceived"),
 				Dimensions: []*cloudwatch.Dimension{
 					&cloudwatch.Dimension{
 						Name:  aws.String("QueueName"),
@@ -172,7 +159,7 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 				},
 			},
 			Period: &period,
-			Stat:   aws.String("p99"),
+			Stat:   aws.String("Sum"),
 		},
 	}
 
@@ -191,66 +178,16 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 	}
 
 	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
-		return *result.MetricDataResults[0].Values[0], nil
+		var sum float64
+		for i := 0; i < len(result.MetricDataResults[0].Values); i++ {
+			sum += *result.MetricDataResults[0].Values[i]
+		}
+		return sum, nil
 	}
 
-	klog.Errorf("Number Of Empty Receives API returned empty result for uri: %q", queueURI)
+	klog.Errorf("NumberOfMessagesReceived Cloudwatch API returned empty result for uri: %q", queueURI)
 
 	return 0.0, nil
-}
-
-func (s *SQS) cachedNumberOfEmptyReceives(queueURI string) (float64, error) {
-	now := time.Now().UnixNano()
-	if (s.lastCachedTimestamp + s.cacheValidity.Nanoseconds()) > now {
-		cache, cacheHit := s.getCache(queueURI)
-		if cacheHit {
-			return cache, nil
-		}
-	}
-
-	emptyReceives, err := s.numberOfEmptyReceives(queueURI)
-	if err != nil {
-		return emptyReceives, err
-	}
-	s.updateCache(queueURI, emptyReceives)
-	s.lastCachedTimestamp = now
-	return emptyReceives, nil
-}
-
-func (s *SQS) listAllCache() map[string]float64 {
-	cacheResultCh := make(chan map[string]float64)
-	s.cacheListCh <- cacheResultCh
-	return <-cacheResultCh
-}
-
-func (s *SQS) getCache(queueURI string) (float64, bool) {
-	allCache := s.listAllCache()
-	if cache, ok := allCache[queueURI]; ok {
-		return cache, true
-	}
-	return 0.0, false
-}
-
-func (s *SQS) updateCache(key string, cache float64) {
-	s.cacheUpdateCh <- map[string]float64{
-		key: cache,
-	}
-}
-
-func (s *SQS) Sync(stopCh <-chan struct{}) {
-	for {
-		select {
-		case update := <-s.cacheUpdateCh:
-			for key, value := range update {
-				s.cache[key] = value
-			}
-		case cacheResultCh := <-s.cacheListCh:
-			cacheResultCh <- s.cache
-		case <-stopCh:
-			klog.Info("Stopping sqs syncer gracefully.")
-			return
-		}
-	}
 }
 
 func (s *SQS) waitForShortPollInterval() {
@@ -335,26 +272,23 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		return
 	}
 
-	// emptyReceives is queried to find if there are idle workers and scale down to
-	// minimum workers, so scale down.
-	// TODO: Continuously high throughout workers are impacted by this and does not scale down
-	// to a lower value even if it is possible
-	emptyReceives, err := s.cachedNumberOfEmptyReceives(queueSpec.uri)
+	numberOfMessagesReceived, err := s.getNumberOfMessagesReceived(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to fetch empty receive metric for queue %q, %v.",
+		klog.Fatalf("Unable to fetch no of received messages for queue %q, %v.",
 			queueSpec.name, err)
 	}
 
 	var idleWorkers int32
-	if emptyReceives == 1.0 {
+	if numberOfMessagesReceived == 0.0 {
+		// this will result in all workers getting scaled down
 		idleWorkers = queueSpec.workers
 	} else {
 		idleWorkers = 0
 	}
 
-	klog.Infof("%s: emptyReceives=%f, workers=%d, idleWorkers=%d",
+	klog.Infof("%s: msgsReceived=%f, workers=%d, idleWorkers=%d",
 		queueSpec.name,
-		emptyReceives,
+		numberOfMessagesReceived,
 		queueSpec.workers,
 		idleWorkers,
 	)
