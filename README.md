@@ -48,22 +48,6 @@ kubectl create -f artifacts/examples/example-wpa.yaml
 
 This will start scaling `example-deployment` based on SQS queue length.
 
-# Why make a separate autoscaler CRD ?
-
-Go through [this medium post](https://medium.com/practo-engineering/launching-worker-pod-autoscaler-3f6079728e8b) for details.
-
-Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. Before making this we were using HPA to scale our worker pods. Below are the reasons for moving away from HPA and making a custom resource:
-
-**TLDR;** Don't want to write and maintain custom metric exporters? Use WPA to quickly start scaling your pods based on queue length with minimum effort (few kubectl commands and you are done !)
-
-1. **No need to write and maintain custom metric exporters**: In case of HPA with custom metrics, the users need to write and maintain the custom metric exporters. This makes sense for HPA to support all kinds of use cases. WPA comes with queue metric exporters(pollers) integrated and the whole setup can start working with 2 kubectl commands.
-
-2. **Different Metrics for Scaling Up and Down**: Scaling up and down metric can be different based on the use case. For example in our case we want to scale up based on SQS `ApproximateNumberOfMessages` length and scale down based on `NumberOfEmptyReceives`. This is because if the worker jobs watching the queue is consuming the queue very fast, `ApproximateNumberOfMessages` would always be zero and you don't want to scale down to 0 in such cases.
-
-3. **Fast Scaling**: We wanted to achieve super fast near real time scaling. As soon as a job comes in queue the containers should scale if needed. The concurrency, speed and interval of sync have been made configurable to keep the API calls to minimum.
-
-4. **On-demand Workers:** min=0 is supported. It's also supported in HPA.
-
 ## Configuration
 
 ## WPA Resource
@@ -76,13 +60,21 @@ metadata:
 spec:
   minReplicas: 0
   maxReplicas: 10
-  targetMessagesPerWorker: 2
   deploymentName: example-deployment
   queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
-  disruptable: false
+  disruptable: true
+  secondsToProcessOneJob: 0.03
+  targetMessagesPerWorker: 2
 ```
 
-**Note:** `disruptable` flag specifies the worker can tolerate the disruption due to scale down. WPA scales down to only minimum when a worker is not disruptable and when a worker is disruptable it can scale down to a value greater than minimum. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50).
+### Flags documentation:
+- **minReplicas**: minimum number of workers you want to run. (mandatory)
+- **maxReplicas**: maximum number of workers you want to run. (mandatory)
+- **deploymentName**: name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
+- **queueURI**: full URL of the queue. (mandatory)
+- **disruptable:** disruptable specifies the worker can tolerate the disruption due to scale down. When the worker is disruptable it can scale down to a value greater than minimum else not. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50). (optional)
+- **secondsToProcessOneJob:**: secondsToProcessOneJob specifies seconds require to process one job by one worker process. `secondsToProcessOneJob * 60` gives the number of jobs that can be processed in a minute by a single worker. We use this metric in combination with `messages sent to the queue` metric to find the desired number of minimum workers. Default of the metric is 0.0. in which case **this functionality of calculating minimum becomes disabled** for you. We recommend to specify this value as it helps in accurate calculation of desired workers. This is very useful for workers which process really fast and have messages in the queue(ApproximateNumberOfMessagesVisible in case of SQS) as zero. (optional, highly recommended)
+- **targetMessagesPerWorker**: Number of jobs in the queue which have not been picked up by the workers. This also used to calculate the desired number of workers. (mandatory)
 
 ## WPA Controller
 
@@ -106,6 +98,21 @@ Flags:
       --wpa-threads int               wpa threadiness, number of threads to process wpa resources (default 10)
 ```
 
+# Why make a separate autoscaler CRD ?
+
+Go through [this medium post](https://medium.com/practo-engineering/launching-worker-pod-autoscaler-3f6079728e8b) for details.
+
+Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. Before making this we were using HPA to scale our worker pods. Below are the reasons for moving away from HPA and making a custom resource:
+
+**TLDR;** Don't want to write and maintain custom metric exporters? Use WPA to quickly start scaling your pods based on queue length with minimum effort (few kubectl commands and you are done !)
+
+1. **No need to write and maintain custom metric exporters**: In case of HPA with custom metrics, the users need to write and maintain the custom metric exporters. This makes sense for HPA to support all kinds of use cases. WPA comes with queue metric exporters(pollers) integrated and the whole setup can start working with 2 kubectl commands.
+
+2. **Different Metrics for Scaling Up and Down**: Scaling up and down metric can be different based on the use case. For example in our case we want to scale up based on SQS `ApproximateNumberOfMessages` length and scale down based on `NumberOfMessagesReceived`. This is because if the worker jobs watching the queue is consuming the queue very fast, `ApproximateNumberOfMessages` would always be zero and you don't want to scale down to 0 in such cases.
+
+3. **Fast Scaling**: We wanted to achieve super fast near real time scaling. As soon as a job comes in queue the containers should scale if needed. The concurrency, speed and interval of sync have been made configurable to keep the API calls to minimum.
+
+4. **On-demand Workers:** min=0 is supported. It's also supported in HPA.
 
 ## Release
 
