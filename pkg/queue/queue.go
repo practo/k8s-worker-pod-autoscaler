@@ -25,7 +25,7 @@ type Queues struct {
 	listCh              chan chan map[string]QueueSpec
 	updateMessageCh     chan map[string]int32
 	idleWorkerCh        chan map[string]int32
-	updateMessageSentCh chan map[string]int32
+	updateMessageSentCh chan map[string]float64
 	item                map[string]QueueSpec
 }
 
@@ -37,19 +37,16 @@ type QueueSpec struct {
 	host      string `json:"host"`
 	protocol  string `json:"protocol"`
 	provider  string `json:"provider"`
-
 	// messages is the number of messages in the queue which have not
 	// been picked up for processing by the worker
 	// SQS: ApproximateNumberOfMessagesVisible metric
 	messages int32 `json:"messages"`
-
 	// messagesSent is the number of messages sent to the queue per minute
 	// SQS: NumberOfMessagesSent metric
 	// this will help in calculating the desired replicas.
 	// It is most useful for workers which process very fast and
 	// always has a messages = 0  in the queue
-	messagesSentPerMinute int32 `json:"messagesSentPerMinute"`
-
+	messagesSentPerMinute float64 `json:"messagesSentPerMinute"`
 	// idleWorkers tells the number of workers which are idle
 	// and not doing any processing.
 	idleWorkers int32 `json:"idleWorkers"`
@@ -62,7 +59,7 @@ func NewQueues() *Queues {
 		deleteCh:            make(chan string),
 		listCh:              make(chan chan map[string]QueueSpec),
 		updateMessageCh:     make(chan map[string]int32),
-		updateMessageSentCh: make(chan map[string]int32),
+		updateMessageSentCh: make(chan map[string]float64),
 		idleWorkerCh:        make(chan map[string]int32),
 		item:                make(map[string]QueueSpec),
 	}
@@ -74,8 +71,8 @@ func (q *Queues) updateMessage(key string, count int32) {
 	}
 }
 
-func (q *Queues) updateMessageSent(key string, count int32) {
-	q.updateMessageSentCh <- map[string]int32{
+func (q *Queues) updateMessageSent(key string, count float64) {
+	q.updateMessageSentCh <- map[string]float64{
 		key: count,
 	}
 }
@@ -102,7 +99,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.messages = value
 				q.item[key] = spec
 			}
-		case messageSent := <-q.updateMessageCh:
+		case messageSent := <-q.updateMessageSentCh:
 			for key, value := range messageSent {
 				if _, ok := q.item[key]; !ok {
 					continue
@@ -155,7 +152,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 
 	messages := int32(UnsyncedQueueMessageCount)
 	idleWorkers := int32(UnsyncedIdleWorkers)
-	messagesSent := int32(UnsyncedMessagesSentPerMinute)
+	messagesSent := float64(UnsyncedMessagesSentPerMinute)
 	spec := q.listQueueByNamespace(namespace, name)
 	if spec.name != "" {
 		messages = spec.messages
@@ -203,7 +200,7 @@ func (q *Queues) listQueueByNamespace(namespace string, name string) QueueSpec {
 	return q.ListQueue(getKey(namespace, name))
 }
 
-func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, int32, int32) {
+func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, float64, int32) {
 	spec := q.listQueueByNamespace(namespace, name)
 	if spec.name == "" {
 		return "", 0, 0, 0

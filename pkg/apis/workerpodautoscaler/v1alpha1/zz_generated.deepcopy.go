@@ -105,7 +105,7 @@ func (in *WorkerPodAutoScalerSpec) DeepCopyInto(out *WorkerPodAutoScalerSpec) {
 	}
 	if in.SecondsToProcessOneJob != nil {
 		in, out := &in.SecondsToProcessOneJob, &out.SecondsToProcessOneJob
-		*out = new(float32)
+		*out = new(float64)
 		**out = **in
 	}
 	return

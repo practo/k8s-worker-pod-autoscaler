@@ -190,11 +190,74 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 	return 0.0, nil
 }
 
+func (s *SQS) getAverageNumberOfMessagesSent(queueURI string) (float64, error) {
+	period := int64(60)
+	duration, err := time.ParseDuration("-5m")
+	if err != nil {
+		return 0.0, err
+	}
+	endTime := time.Now().Add(duration)
+	startTime := endTime.Add(duration)
+
+	query := &cloudwatch.MetricDataQuery{
+		Id: aws.String("id1"),
+		MetricStat: &cloudwatch.MetricStat{
+			Metric: &cloudwatch.Metric{
+				Namespace:  aws.String("AWS/SQS"),
+				MetricName: aws.String("NumberOfMessagesSent"),
+				Dimensions: []*cloudwatch.Dimension{
+					&cloudwatch.Dimension{
+						Name:  aws.String("QueueName"),
+						Value: aws.String(path.Base(queueURI)),
+					},
+				},
+			},
+			Period: &period,
+			Stat:   aws.String("Sum"),
+		},
+	}
+
+	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
+		EndTime:           &endTime,
+		StartTime:         &startTime,
+		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
+	})
+
+	if err != nil {
+		return 0.0, err
+	}
+
+	if len(result.MetricDataResults) > 1 {
+		return 0.0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
+	}
+
+	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
+		var sum float64
+		for i := 0; i < len(result.MetricDataResults[0].Values); i++ {
+			sum += *result.MetricDataResults[0].Values[i]
+		}
+		return sum / float64(len(result.MetricDataResults[0].Values)), nil
+	}
+
+	klog.Errorf("NumberOfMessagesSent Cloudwatch API returned empty result for uri: %q", queueURI)
+
+	return 0.0, nil
+}
+
 func (s *SQS) waitForShortPollInterval() {
 	time.Sleep(s.shortPollInterval)
 }
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
+	// TODO: prevent api call here if SecondsToProcessOneJob is not set(==0.0)
+	messagesSentPerMinute, err := s.getAverageNumberOfMessagesSent(queueSpec.uri)
+	if err != nil {
+		klog.Fatalf("Unable to fetch no of messages to the queue %q, %v.",
+			queueSpec.name, err)
+	}
+	s.queues.updateMessageSent(key, messagesSentPerMinute)
+	klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
+
 	if queueSpec.workers == 0 && queueSpec.messages == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 

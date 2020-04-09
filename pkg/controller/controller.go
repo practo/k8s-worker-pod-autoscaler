@@ -359,9 +359,9 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 // getMinWorkers gets the min workers based on the
 // velocity metric: messagesSentPerMinute
 func (c *Controller) getMinWorkers(
-	messagesSentPerMinute int32,
+	messagesSentPerMinute float64,
 	minWorkers int32,
-	secondsToProcessOneJob float32) int32 {
+	secondsToProcessOneJob float64) int32 {
 
 	// disable this feature for WPA queues which have not specified
 	// processing time
@@ -369,7 +369,7 @@ func (c *Controller) getMinWorkers(
 		return minWorkers
 	}
 
-	workersBasedOnMessagesSent := int32(float32(messagesSentPerMinute) / (secondsToProcessOneJob * 60))
+	workersBasedOnMessagesSent := int32(math.Ceil(messagesSentPerMinute / (secondsToProcessOneJob * 60)))
 	if workersBasedOnMessagesSent > minWorkers {
 		return workersBasedOnMessagesSent
 	}
@@ -380,8 +380,8 @@ func (c *Controller) getMinWorkers(
 // test case run: https://play.golang.org/p/_dFbbhb1J_8
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
-	messagesSentPerMinute int32,
-	secondsToProcessOneJob float32,
+	messagesSentPerMinute float64,
+	secondsToProcessOneJob float64,
 	targetMessagesPerWorker int32,
 	currentWorkers int32,
 	idleWorkers int32,
