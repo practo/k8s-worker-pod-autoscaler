@@ -284,13 +284,16 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
-	queueName, queueMessages, idleWorkers := c.Queues.GetQueueInfo(namespace, name)
+	queueName, queueMessages, messagesSentPerMinute, idleWorkers := c.Queues.GetQueueInfo(
+		namespace, name)
 	if queueName == "" {
 		return nil
 	}
 
 	desiredWorkers := c.getDesiredWorkers(
 		queueMessages,
+		messagesSentPerMinute,
+		*workerPodAutoScaler.Spec.SecondsToProcessOneJob,
 		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
 		deployment.Status.AvailableReplicas,
 		idleWorkers,
@@ -353,10 +356,32 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 	}
 }
 
+// getMinWorkers gets the min workers based on the
+// velocity metric: messagesSentPerMinute
+func (c *Controller) getMinWorkers(
+	messagesSentPerMinute int32,
+	minWorkers int32,
+	secondsToProcessOneJob float32) int32 {
+
+	// disable this feature for WPA queues which have not specified
+	// processing time
+	if secondsToProcessOneJob == 0.0 {
+		return minWorkers
+	}
+
+	workersBasedOnMessagesSent := int32(float32(messagesSentPerMinute) / (secondsToProcessOneJob * 60))
+	if workersBasedOnMessagesSent > minWorkers {
+		return workersBasedOnMessagesSent
+	}
+	return minWorkers
+}
+
 // getDesiredWorkers finds the desired number of workers which are required
 // test case run: https://play.golang.org/p/_dFbbhb1J_8
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
+	messagesSentPerMinute int32,
+	secondsToProcessOneJob float32,
 	targetMessagesPerWorker int32,
 	currentWorkers int32,
 	idleWorkers int32,
@@ -364,9 +389,13 @@ func (c *Controller) getDesiredWorkers(
 	maxWorkers int32,
 	disruptable bool) int32 {
 
+	// overwrite the minimum workers needed based on
+	// messagesSentPerMinute and secondsToProcessOneJob
+	// this feature is disabled if secondsToProcessOneJob is not set or is 0.0
+	minWorkers = c.getMinWorkers(messagesSentPerMinute, minWorkers, secondsToProcessOneJob)
+
 	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
-
 	if currentWorkers == 0 {
 		desiredWorkers := int32(math.Ceil(usageRatio))
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
@@ -387,8 +416,16 @@ func (c *Controller) getDesiredWorkers(
 			return currentWorkers
 		}
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
+	} else if messagesSentPerMinute > 0 && secondsToProcessOneJob > 0.0 {
+		// this is the case in which there is no backlog visible.
+		// (mostly because the workers picks up jobs very quickly)
+		// But the queue has throughput, so we return the minWorkers.
+		// Note: minWorkers is updated based on
+		// messagesSentPerMinute and secondsToProcessOneJob
+		return minWorkers
 	}
 
+	// Attempt for massive scale down
 	if idleWorkers > 0 {
 		desiredWorkers := currentWorkers - idleWorkers
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
