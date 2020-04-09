@@ -293,7 +293,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	desiredWorkers := c.getDesiredWorkers(
 		queueMessages,
 		messagesSentPerMinute,
-		*workerPodAutoScaler.Spec.SecondsToProcessOneJob,
+		workerPodAutoScaler.Spec.SecondsToProcessOneJob,
 		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
 		deployment.Status.AvailableReplicas,
 		idleWorkers,
