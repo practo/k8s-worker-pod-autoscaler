@@ -381,7 +381,8 @@ func (c *Controller) getMinWorkers(
 		return minWorkers
 	}
 
-	workersBasedOnMessagesSent := int32(math.Ceil(messagesSentPerMinute / (secondsToProcessOneJob * 60)))
+	workersBasedOnMessagesSent := int32(math.Ceil((secondsToProcessOneJob * messagesSentPerMinute) / 60))
+	//klog.Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
 	if workersBasedOnMessagesSent > minWorkers {
 		return workersBasedOnMessagesSent
 	}

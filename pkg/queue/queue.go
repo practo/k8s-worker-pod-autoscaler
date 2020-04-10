@@ -159,6 +159,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32, s
 	spec := q.listQueueByNamespace(namespace, name)
 	if spec.name != "" {
 		messages = spec.messages
+		messagesSent = spec.messagesSentPerMinute
 		idleWorkers = spec.idleWorkers
 	}
 
@@ -207,7 +208,7 @@ func (q *Queues) listQueueByNamespace(namespace string, name string) QueueSpec {
 func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, float64, int32) {
 	spec := q.listQueueByNamespace(namespace, name)
 	if spec.name == "" {
-		return "", 0, 0, 0
+		return "", 0, 0.0, 0
 	}
 
 	return spec.name, spec.messages, spec.messagesSentPerMinute, spec.idleWorkers
