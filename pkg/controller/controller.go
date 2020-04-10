@@ -335,7 +335,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 			klog.Errorf("Error updating status of wpa (1.13 apiserver has the fix): %v", err)
 			return nil
 		}
-		klog.Fatalf("Error updating status of wpa: %v", err)
+		return err
 	}
 
 	// TODO: organize and log events

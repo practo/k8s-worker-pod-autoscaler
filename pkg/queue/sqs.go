@@ -28,11 +28,19 @@ type SQS struct {
 
 	// cache the numberOfSentMessages as it is refreshed
 	// in aws every 1minute - prevent un-necessary api calls
-	cache               map[string]float64
-	cacheValidity       time.Duration
-	cacheListCh         chan chan map[string]float64
-	cacheUpdateCh       chan map[string]float64
-	lastCachedTimestamp int64
+	cacheSentMessages              map[string]float64
+	cacheSentMessagesValidity      time.Duration
+	cacheSentMessagesListCh        chan chan map[string]float64
+	cacheSentMessagesUpdateCh      chan map[string]float64
+	cacheSentMessageslastTimestamp int64
+
+	// cache the numberOfReceiveMessages as it is refreshed
+	// in aws every 1minute - prevent un-necessary api calls
+	cacheReceiveMessages              map[string]float64
+	cacheReceiveMessagesValidity      time.Duration
+	cacheReceiveMessagesListCh        chan chan map[string]float64
+	cacheReceiveMessagesUpdateCh      chan map[string]float64
+	cacheReceiveMessageslastTimestamp int64
 }
 
 func NewSQS(
@@ -65,10 +73,15 @@ func NewSQS(
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
 
-		cache:         make(map[string]float64),
-		cacheValidity: time.Second * time.Duration(60),
-		cacheListCh:   make(chan chan map[string]float64),
-		cacheUpdateCh: make(chan map[string]float64),
+		cacheSentMessages:         make(map[string]float64),
+		cacheSentMessagesValidity: time.Second * time.Duration(60),
+		cacheSentMessagesListCh:   make(chan chan map[string]float64),
+		cacheSentMessagesUpdateCh: make(chan map[string]float64),
+
+		cacheReceiveMessages:         make(map[string]float64),
+		cacheReceiveMessagesValidity: time.Second * time.Duration(60),
+		cacheReceiveMessagesListCh:   make(chan chan map[string]float64),
+		cacheReceiveMessagesUpdateCh: make(chan map[string]float64),
 	}, nil
 }
 
@@ -206,12 +219,18 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 func (s *SQS) Sync(stopCh <-chan struct{}) {
 	for {
 		select {
-		case update := <-s.cacheUpdateCh:
+		case update := <-s.cacheSentMessagesUpdateCh:
 			for key, value := range update {
-				s.cache[key] = value
+				s.cacheSentMessages[key] = value
 			}
-		case cacheResultCh := <-s.cacheListCh:
-			cacheResultCh <- s.cache
+		case update := <-s.cacheReceiveMessagesUpdateCh:
+			for key, value := range update {
+				s.cacheReceiveMessages[key] = value
+			}
+		case cacheResultCh := <-s.cacheSentMessagesListCh:
+			cacheResultCh <- s.cacheSentMessages
+		case cacheResultCh := <-s.cacheReceiveMessagesListCh:
+			cacheResultCh <- s.cacheReceiveMessages
 		case <-stopCh:
 			klog.Info("Stopping sqs syncer gracefully.")
 			return
@@ -219,30 +238,30 @@ func (s *SQS) Sync(stopCh <-chan struct{}) {
 	}
 }
 
-func (s *SQS) listAllCache() map[string]float64 {
+func (s *SQS) listAllSentMessageCache() map[string]float64 {
 	cacheResultCh := make(chan map[string]float64)
-	s.cacheListCh <- cacheResultCh
+	s.cacheSentMessagesListCh <- cacheResultCh
 	return <-cacheResultCh
 }
 
-func (s *SQS) getCache(queueURI string) (float64, bool) {
-	allCache := s.listAllCache()
+func (s *SQS) getSentMessageCache(queueURI string) (float64, bool) {
+	allCache := s.listAllSentMessageCache()
 	if cache, ok := allCache[queueURI]; ok {
 		return cache, true
 	}
 	return 0.0, false
 }
 
-func (s *SQS) updateCache(key string, cache float64) {
-	s.cacheUpdateCh <- map[string]float64{
+func (s *SQS) updateSentMessageCache(key string, cache float64) {
+	s.cacheSentMessagesUpdateCh <- map[string]float64{
 		key: cache,
 	}
 }
 
 func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
 	now := time.Now().UnixNano()
-	if (s.lastCachedTimestamp + s.cacheValidity.Nanoseconds()) > now {
-		cache, cacheHit := s.getCache(queueURI)
+	if (s.cacheSentMessageslastTimestamp + s.cacheSentMessagesValidity.Nanoseconds()) > now {
+		cache, cacheHit := s.getSentMessageCache(queueURI)
 		if cacheHit {
 			return cache, nil
 		}
@@ -252,9 +271,47 @@ func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
 	if err != nil {
 		return messagesSent, err
 	}
-	s.updateCache(queueURI, messagesSent)
-	s.lastCachedTimestamp = now
+	s.updateSentMessageCache(queueURI, messagesSent)
+	s.cacheSentMessageslastTimestamp = now
 	return messagesSent, nil
+}
+
+func (s *SQS) listAllReceiveMessageCache() map[string]float64 {
+	cacheResultCh := make(chan map[string]float64)
+	s.cacheReceiveMessagesListCh <- cacheResultCh
+	return <-cacheResultCh
+}
+
+func (s *SQS) getReceiveMessageCache(queueURI string) (float64, bool) {
+	allCache := s.listAllReceiveMessageCache()
+	if cache, ok := allCache[queueURI]; ok {
+		return cache, true
+	}
+	return 0.0, false
+}
+
+func (s *SQS) updateReceiveMessageCache(key string, cache float64) {
+	s.cacheReceiveMessagesUpdateCh <- map[string]float64{
+		key: cache,
+	}
+}
+
+func (s *SQS) cachedNumberOfReceiveMessages(queueURI string) (float64, error) {
+	now := time.Now().UnixNano()
+	if (s.cacheReceiveMessageslastTimestamp + s.cacheReceiveMessagesValidity.Nanoseconds()) > now {
+		cache, cacheHit := s.getReceiveMessageCache(queueURI)
+		if cacheHit {
+			return cache, nil
+		}
+	}
+
+	messagesReceived, err := s.getNumberOfMessagesReceived(queueURI)
+	if err != nil {
+		return messagesReceived, err
+	}
+	s.updateReceiveMessageCache(queueURI, messagesReceived)
+	s.cacheReceiveMessageslastTimestamp = now
+	return messagesReceived, nil
 }
 
 func (s *SQS) getAverageNumberOfMessagesSent(queueURI string) (float64, error) {
@@ -403,7 +460,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		return
 	}
 
-	numberOfMessagesReceived, err := s.getNumberOfMessagesReceived(queueSpec.uri)
+	numberOfMessagesReceived, err := s.cachedNumberOfReceiveMessages(queueSpec.uri)
 	if err != nil {
 		klog.Fatalf("Unable to fetch no of received messages for queue %q, %v.",
 			queueSpec.name, err)
