@@ -25,6 +25,14 @@ type SQS struct {
 
 	shortPollInterval time.Duration
 	longPollInterval  int64
+
+	// cache the numberOfSentMessages as it is refreshed
+	// in aws every 1minute - prevent un-necessary api calls
+	cache               map[string]float64
+	cacheValidity       time.Duration
+	cacheListCh         chan chan map[string]float64
+	cacheUpdateCh       chan map[string]float64
+	lastCachedTimestamp int64
 }
 
 func NewSQS(
@@ -56,6 +64,11 @@ func NewSQS(
 
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
+
+		cache:         make(map[string]float64),
+		cacheValidity: time.Second * time.Duration(60),
+		cacheListCh:   make(chan chan map[string]float64),
+		cacheUpdateCh: make(chan map[string]float64),
 	}, nil
 }
 
@@ -190,6 +203,60 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 	return 0.0, nil
 }
 
+func (s *SQS) Sync(stopCh <-chan struct{}) {
+	for {
+		select {
+		case update := <-s.cacheUpdateCh:
+			for key, value := range update {
+				s.cache[key] = value
+			}
+		case cacheResultCh := <-s.cacheListCh:
+			cacheResultCh <- s.cache
+		case <-stopCh:
+			klog.Info("Stopping sqs syncer gracefully.")
+			return
+		}
+	}
+}
+
+func (s *SQS) listAllCache() map[string]float64 {
+	cacheResultCh := make(chan map[string]float64)
+	s.cacheListCh <- cacheResultCh
+	return <-cacheResultCh
+}
+
+func (s *SQS) getCache(queueURI string) (float64, bool) {
+	allCache := s.listAllCache()
+	if cache, ok := allCache[queueURI]; ok {
+		return cache, true
+	}
+	return 0.0, false
+}
+
+func (s *SQS) updateCache(key string, cache float64) {
+	s.cacheUpdateCh <- map[string]float64{
+		key: cache,
+	}
+}
+
+func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
+	now := time.Now().UnixNano()
+	if (s.lastCachedTimestamp + s.cacheValidity.Nanoseconds()) > now {
+		cache, cacheHit := s.getCache(queueURI)
+		if cacheHit {
+			return cache, nil
+		}
+	}
+
+	messagesSent, err := s.getAverageNumberOfMessagesSent(queueURI)
+	if err != nil {
+		return messagesSent, err
+	}
+	s.updateCache(queueURI, messagesSent)
+	s.lastCachedTimestamp = now
+	return messagesSent, nil
+}
+
 func (s *SQS) getAverageNumberOfMessagesSent(queueURI string) (float64, error) {
 	period := int64(60)
 	duration, err := time.ParseDuration("-5m")
@@ -249,16 +316,7 @@ func (s *SQS) waitForShortPollInterval() {
 }
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
-	// TODO: prevent api call here if SecondsToProcessOneJob is not set(==0.0)
-	messagesSentPerMinute, err := s.getAverageNumberOfMessagesSent(queueSpec.uri)
-	if err != nil {
-		klog.Fatalf("Unable to fetch no of messages to the queue %q, %v.",
-			queueSpec.name, err)
-	}
-	s.queues.updateMessageSent(key, messagesSentPerMinute)
-	klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
-
-	if queueSpec.workers == 0 && queueSpec.messages == 0 {
+	if queueSpec.workers == 0 && queueSpec.messages == 0 && queueSpec.messagesSentPerMinute == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
 		// If there are no workers running we do a long poll to find a job(s)
@@ -283,6 +341,16 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 		s.queues.updateMessage(key, messagesReceived)
 		return
+	}
+
+	if queueSpec.secondsToProcessOneJob != 0.0 {
+		messagesSentPerMinute, err := s.cachedNumberOfSentMessages(queueSpec.uri)
+		if err != nil {
+			klog.Fatalf("Unable to fetch no of messages to the queue %q, %v.",
+				queueSpec.name, err)
+		}
+		s.queues.updateMessageSent(key, messagesSentPerMinute)
+		klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
 	}
 
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)

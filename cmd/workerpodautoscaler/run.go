@@ -129,6 +129,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	for _, poller := range []queue.Poller{sqsPoller} {
 		go poller.Run(stopCh)
 	}
+	go sqs.Sync(stopCh)
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncPeriod)
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, resyncPeriod)

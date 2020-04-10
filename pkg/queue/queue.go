@@ -51,6 +51,9 @@ type QueueSpec struct {
 	// and not doing any processing.
 	idleWorkers int32 `json:"idleWorkers"`
 	workers     int32 `json:"workers"`
+
+	// secondsToProcessOneJob tells the time to process one job by one worker process
+	secondsToProcessOneJob float64 `json:"secondsToProcessOneJob"`
 }
 
 func NewQueues() *Queues {
@@ -131,7 +134,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 	}
 }
 
-func (q *Queues) Add(namespace string, name string, uri string, workers int32) error {
+func (q *Queues) Add(namespace string, name string, uri string, workers int32, secondsToProcessOneJob float64) error {
 	if uri == "" {
 		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
@@ -160,16 +163,17 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32) e
 	}
 
 	queueSpec := QueueSpec{
-		name:                  queueName,
-		namespace:             namespace,
-		uri:                   uri,
-		protocol:              protocol,
-		host:                  host,
-		provider:              provider,
-		messages:              messages,
-		messagesSentPerMinute: messagesSent,
-		workers:               workers,
-		idleWorkers:           idleWorkers,
+		name:                   queueName,
+		namespace:              namespace,
+		uri:                    uri,
+		protocol:               protocol,
+		host:                   host,
+		provider:               provider,
+		messages:               messages,
+		messagesSentPerMinute:  messagesSent,
+		workers:                workers,
+		idleWorkers:            idleWorkers,
+		secondsToProcessOneJob: secondsToProcessOneJob,
 	}
 
 	q.addCh <- map[string]QueueSpec{key: queueSpec}

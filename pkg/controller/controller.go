@@ -273,9 +273,21 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	switch event.name {
 	case WokerPodAutoScalerEventAdd:
-		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
+		err = c.Queues.Add(
+			namespace,
+			name,
+			workerPodAutoScaler.Spec.QueueURI,
+			workers,
+			workerPodAutoScaler.Spec.SecondsToProcessOneJob,
+		)
 	case WokerPodAutoScalerEventUpdate:
-		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
+		err = c.Queues.Add(
+			namespace,
+			name,
+			workerPodAutoScaler.Spec.QueueURI,
+			workers,
+			workerPodAutoScaler.Spec.SecondsToProcessOneJob,
+		)
 	case WokerPodAutoScalerEventDelete:
 		err = c.Queues.Delete(namespace, name)
 	}
