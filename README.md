@@ -92,10 +92,25 @@ Flags:
       --aws-regions string            comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
   -h, --help                          help for run
       --kube-config string            path of the kube config file, if not specified in cluster config is used
+      --metrics-port string           specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
       --resync-period int             sync period for the worker pod autoscaler (default 20)
       --sqs-long-poll-interval int    the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
       --sqs-short-poll-interval int   the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
       --wpa-threads int               wpa threadiness, number of threads to process wpa resources (default 10)
+```
+
+## WPA Metrics
+
+WPA emits the following prometheus metrics at `:8787/metrics`.
+```
+wpa_controller_loop_count_success{workerpodautoscaler="example-wpa", namespace="example-namespace"} 230
+wpa_controller_loop_duration_seconds{workerpodautoscaler="example-wpa", namespace="example-namespace"} 0.023
+```
+
+If you have [ServiceMonitor](https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/getting-started.md) installed in your cluster. You can bring these metrics to Prometheus by running the following:
+```
+kubectl create -f artifacts/service.yaml
+kubctl create -f artifacts/servicemonitor.yaml
 ```
 
 # Why make a separate autoscaler CRD ?
