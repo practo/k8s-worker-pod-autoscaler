@@ -31,29 +31,29 @@ type Queues struct {
 
 // QueueSpec is the specification for a single queue
 type QueueSpec struct {
-	name      string `json:"name"`
-	namespace string `json:"namespace"`
-	uri       string `json:"uri"`
-	host      string `json:"host"`
-	protocol  string `json:"protocol"`
-	provider  string `json:"provider"`
+	name      string
+	namespace string
+	uri       string
+	host      string
+	protocol  string
+	provider  string
 	// messages is the number of messages in the queue which have not
 	// been picked up for processing by the worker
 	// SQS: ApproximateNumberOfMessagesVisible metric
-	messages int32 `json:"messages"`
+	messages int32
 	// messagesSent is the number of messages sent to the queue per minute
 	// SQS: NumberOfMessagesSent metric
 	// this will help in calculating the desired replicas.
 	// It is most useful for workers which process very fast and
 	// always has a messages = 0  in the queue
-	messagesSentPerMinute float64 `json:"messagesSentPerMinute"`
+	messagesSentPerMinute float64
 	// idleWorkers tells the number of workers which are idle
 	// and not doing any processing.
-	idleWorkers int32 `json:"idleWorkers"`
-	workers     int32 `json:"workers"`
+	idleWorkers int32
+	workers     int32
 
 	// secondsToProcessOneJob tells the time to process one job by one worker process
-	secondsToProcessOneJob float64 `json:"secondsToProcessOneJob"`
+	secondsToProcessOneJob float64
 }
 
 func NewQueues() *Queues {

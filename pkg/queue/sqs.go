@@ -462,8 +462,10 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 	numberOfMessagesReceived, err := s.cachedNumberOfReceiveMessages(queueSpec.uri)
 	if err != nil {
-		klog.Fatalf("Unable to fetch no of received messages for queue %q, %v.",
+		klog.Errorf("Unable to fetch no of received messages for queue %q, %v.",
 			queueSpec.name, err)
+		time.Sleep(100 * time.Millisecond)
+		return
 	}
 
 	var idleWorkers int32
