@@ -1,23 +1,19 @@
-set -o errexit
+#!/bin/sh
 set -o nounset
 set -o pipefail
 
 export CGO_ENABLED=0
+export GO111MODULE=on
+export GOFLAGS="-mod=vendor"
 
 TARGETS=$(for d in "$@"; do echo ./$d/...; done)
 
-echo "Test targets: " ${TARGETS}
-
 echo "Running tests:"
-go test -v -i -installsuffix "static" ${TARGETS}
-go test -v -installsuffix "static" ${TARGETS}
+go test -installsuffix "static" ${TARGETS}
 echo
 
-# TODO: fix me https://github.com/practo/k8s-worker-pod-autoscalers/issues/55
-exit 0
 echo -n "Checking gofmt: "
 ERRS=$(find "$@" -type f -name \*.go | xargs gofmt -l 2>&1 || true)
-echo ${ERRS}
 if [ -n "${ERRS}" ]; then
     echo "FAIL - the following files need to be gofmt'ed:"
     for e in ${ERRS}; do
