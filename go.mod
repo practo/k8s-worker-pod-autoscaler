@@ -1,6 +1,6 @@
 module github.com/practo/k8s-worker-pod-autoscaler
 
-go 1.12
+go 1.14
 
 require (
 	github.com/aws/aws-sdk-go v1.29.15
