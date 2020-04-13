@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -54,6 +55,33 @@ const (
 	// WokerPodAutoScalerEventDelete stores the add event name
 	WokerPodAutoScalerEventDelete = "delete"
 )
+
+var (
+	loopDurationSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "controller",
+			Name:      "loop_duration_seconds",
+			Help:      "Number of seconds to complete the control loop succesfully, partitioned by wpa name and namespace",
+		},
+		[]string{"workerpodautoscaler", "namespace"},
+	)
+
+	loopCountSuccess = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "wpa",
+			Subsystem: "controller",
+			Name:      "loop_count_success",
+			Help:      "How many times the control loop executed succesfully, partitioned by wpa name and namespace",
+		},
+		[]string{"workerpodautoscaler", "namespace"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(loopDurationSeconds)
+	prometheus.MustRegister(loopCountSuccess)
+}
 
 type WokerPodAutoScalerEvent struct {
 	key  string
@@ -226,6 +254,7 @@ func (c *Controller) processNextWorkItem() bool {
 // converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
+	now := time.Now()
 	key := event.key
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -337,6 +366,15 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		}
 		return err
 	}
+
+	loopDurationSeconds.WithLabelValues(
+		name,
+		namespace,
+	).Set(time.Since(now).Seconds())
+	loopCountSuccess.WithLabelValues(
+		name,
+		namespace,
+	).Inc()
 
 	// TODO: organize and log events
 	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)

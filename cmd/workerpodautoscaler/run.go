@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/cmdutil"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/signals"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 
 	workerpodautoscalercontroller "github.com/practo/k8s-worker-pod-autoscaler/pkg/controller"
@@ -51,6 +53,7 @@ func (v *runCmd) new() *cobra.Command {
 		"kube-config",
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
+		"metrics-port",
 	}
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
@@ -59,6 +62,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
+	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
 
 	for _, flagName := range flagNames {
 		if err := v.BindFlag(flagName); err != nil {
@@ -86,6 +90,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeConfigPath := v.Viper.GetString("kube-config")
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
+	metricsPort := v.Viper.GetString("metrics-port")
 
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
@@ -145,11 +150,23 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 
+	go serveMetrics(metricsPort)
+
 	// TODO: autoscale the worker threads based on number of queues registred in WPA
 	if err = controller.Run(wpaThraeds, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 	return
+}
+
+func serveMetrics(metricsPort string) {
+	http.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	http.Handle("/metrics", promhttp.Handler())
+	http.ListenAndServe(metricsPort, nil)
 }
 
 func createRestConfig(kubeConfigPath string) (*rest.Config, error) {
