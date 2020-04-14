@@ -496,7 +496,15 @@ func updateWorkerPodAutoScalerStatus(
 	availableReplicas int32,
 	queueMessages int32) {
 
-	klog.Infof("%s/%s: Updating wpa status\n", namespace, name)
+	if workerPodAutoScaler.Status.CurrentReplicas == availableReplicas &&
+		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
+		workerPodAutoScaler.Status.CurrentMessages == queueMessages {
+		klog.Infof("%s/%s: WPA status is already up to date\n", namespace, name)
+		return
+	} else {
+		klog.Infof("%s/%s: Updating wpa status\n", namespace, name)
+	}
+
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
