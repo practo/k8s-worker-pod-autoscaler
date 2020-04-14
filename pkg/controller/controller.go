@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -350,22 +349,15 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(
+	go updateWorkerPodAutoScalerStatus(
+		name,
+		namespace,
+		c.customclientset,
 		desiredWorkers,
 		workerPodAutoScaler,
 		deployment.Status.AvailableReplicas,
 		queueMessages,
 	)
-	if err != nil {
-		// TODO: till the api server has https://github.com/kubernetes/kubernetes/pull/72856 fix
-		// ignore this error
-		// this was fixed in 1.13.1 release
-		if strings.Contains(err.Error(), "0-length response with status code: 200 and content type:") {
-			klog.Errorf("Error updating status of wpa (1.13 apiserver has the fix): %v", err)
-			return nil
-		}
-		return err
-	}
 
 	loopDurationSeconds.WithLabelValues(
 		name,
@@ -495,12 +487,16 @@ func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 
 	return desired
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(
+func updateWorkerPodAutoScalerStatus(
+	name string,
+	namespace string,
+	customclientset clientset.Interface,
 	desiredWorkers int32,
 	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
 	availableReplicas int32,
-	queueMessages int32) error {
+	queueMessages int32) {
 
+	klog.Infof("%s/%s: Updating wpa status\n", namespace, name)
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
@@ -512,8 +508,13 @@ func (c *Controller) updateWorkerPodAutoScalerStatus(
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := c.customclientset.K8sV1alpha1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
-	return err
+	_, err := customclientset.K8sV1alpha1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
+	if err != nil {
+		klog.Errorf("Error updating wpa status, err: %v", err)
+		return
+	}
+	klog.Infof("%s/%s: Updated wpa status\n", namespace, name)
+	return
 }
 
 // getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
