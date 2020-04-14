@@ -349,7 +349,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	go updateWorkerPodAutoScalerStatus(
+	updateWorkerPodAutoScalerStatus(
 		name,
 		namespace,
 		c.customclientset,
