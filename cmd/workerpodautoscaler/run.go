@@ -54,6 +54,8 @@ func (v *runCmd) new() *cobra.Command {
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
 		"metrics-port",
+		"k8s-api-qps",
+		"k8s-api-burst",
 	}
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
@@ -63,6 +65,8 @@ func (v *runCmd) new() *cobra.Command {
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
+	flags.Float64("k8s-api-qps", 5.0, "qps indicates the maximum QPS to the k8s api from the clients(wpa).")
+	flags.Int("k8s-api-burst", 10, "maximum burst for throttle between requests from clients(wpa) to k8s api")
 
 	for _, flagName := range flagNames {
 		if err := v.BindFlag(flagName); err != nil {
@@ -91,6 +95,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
 	metricsPort := v.Viper.GetString("metrics-port")
+	k8sApiQPS := float32(v.Viper.GetFloat64("k8s-api-qps"))
+	k8sApiBurst := v.Viper.GetInt("k8s-api-burst")
 
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
@@ -100,6 +106,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	if err != nil {
 		klog.Fatalf("Error building kubeconfig: %s", err.Error())
 	}
+	cfg.QPS = k8sApiQPS
+	cfg.Burst = k8sApiBurst
 
 	kubeClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {

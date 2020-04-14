@@ -90,6 +90,8 @@ Examples:
 
 Flags:
       --aws-regions string            comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
+      --k8s-api-burst int              maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
+      --k8s-api-qps float              qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
   -h, --help                          help for run
       --kube-config string            path of the kube config file, if not specified in cluster config is used
       --metrics-port string           specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
@@ -98,6 +100,7 @@ Flags:
       --sqs-short-poll-interval int   the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
       --wpa-threads int               wpa threadiness, number of threads to process wpa resources (default 10)
 ```
+**Note:** `k8s-api-burst` and `k8s-api-qps` flags may need to be tweaked when you are running WPA at scale.
 
 ## WPA Metrics
 
