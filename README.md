@@ -62,9 +62,9 @@ spec:
   maxReplicas: 10
   deploymentName: example-deployment
   queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
-  disruptable: true
-  secondsToProcessOneJob: 0.03
   targetMessagesPerWorker: 2
+  secondsToProcessOneJob: 0.03
+  minAvailableReplicas: 0
 ```
 
 ### Flags documentation:
@@ -72,9 +72,9 @@ spec:
 - **maxReplicas**: maximum number of workers you want to run. (mandatory)
 - **deploymentName**: name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
 - **queueURI**: full URL of the queue. (mandatory)
-- **disruptable:** disruptable specifies the worker can tolerate the disruption due to scale down. When the worker is disruptable it can scale down to a value greater than minimum else not. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50). (optional)
-- **secondsToProcessOneJob:**: secondsToProcessOneJob specifies seconds require to process one job by one worker process. `secondsToProcessOneJob * 60` gives the number of jobs that can be processed in a minute by a single worker. We use this metric in combination with `messages sent to the queue` metric to find the desired number of minimum workers. Default of the metric is 0.0. in which case **this functionality of calculating minimum becomes disabled** for you. We recommend to specify this value as it helps in accurate calculation of desired workers. This is very useful for workers which process really fast and have messages in the queue(ApproximateNumberOfMessagesVisible in case of SQS) as zero. (optional, highly recommended)
 - **targetMessagesPerWorker**: Number of jobs in the queue which have not been picked up by the workers. This also used to calculate the desired number of workers. (mandatory)
+- **secondsToProcessOneJob:**: secondsToProcessOneJob specifies seconds require to process one job by one worker process. `secondsToProcessOneJob * 60` gives the number of jobs that can be processed in a minute by a single worker. We use this metric in combination with `messages sent to the queue` metric to find the desired number of minimum workers. Default of the metric is 0.0. in which case **this functionality of calculating minimum becomes disabled** for you. We recommend to specify this value as it helps in accurate calculation of desired workers. This is very useful for workers which process really fast and have messages in the queue(ApproximateNumberOfMessagesVisible in case of SQS) as zero. (optional, highly recommended)
+- **minAvailableReplicas:** this specifies the worker disruption budget. Minimum number of pods that should be available at all times. Scale down can only happen to a value greater than `minAvailableReplicas`. By default workers are expected to be idempotent and can tolerate disruptions due to scale down. So the default is 0 i.e. scale down can happen when some workers are doing the processing. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50). **If your workers which are doing the processing cannot tolerate the disruption due to scale down, set this value accordingly.** (optional, default=0)
 
 ## WPA Controller
 
@@ -106,8 +106,9 @@ Flags:
 
 WPA emits the following prometheus metrics at `:8787/metrics`.
 ```
-wpa_controller_loop_count_success{workerpodautoscaler="example-wpa", namespace="example-namespace"} 230
-wpa_controller_loop_duration_seconds{workerpodautoscaler="example-wpa", namespace="example-namespace"} 0.023
+wpa_controller_loop_count_success{workerpodautoscaler="example-wpa", namespace="example-namespace"} 23140
+wpa_controller_loop_duration_seconds{workerpodautoscaler="example-wpa", namespace="example-namespace"} 0.39
+go_goroutines{endpoint="workerpodautoscaler-metrics"}	5843
 ```
 
 If you have [ServiceMonitor](https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/getting-started.md) installed in your cluster. You can bring these metrics to Prometheus by running the following:

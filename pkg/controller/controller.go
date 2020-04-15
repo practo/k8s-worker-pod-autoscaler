@@ -339,7 +339,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
-		workerPodAutoScaler.Spec.Disruptable,
+		workerPodAutoScaler.Spec.MinAvailableReplicas,
 	)
 	klog.Infof("%s: messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
@@ -430,7 +430,7 @@ func (c *Controller) getDesiredWorkers(
 	idleWorkers int32,
 	minWorkers int32,
 	maxWorkers int32,
-	disruptable bool) int32 {
+	minAvailableWorkers int32) int32 {
 
 	// overwrite the minimum workers needed based on
 	// messagesSentPerMinute and secondsToProcessOneJob
@@ -455,9 +455,10 @@ func (c *Controller) getDesiredWorkers(
 		}
 
 		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
-		if !disruptable && desiredWorkers < currentWorkers {
-			return currentWorkers
+		if desiredWorkers < minAvailableWorkers {
+			desiredWorkers = minAvailableWorkers
 		}
+
 		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
 	} else if messagesSentPerMinute > 0 && secondsToProcessOneJob > 0.0 {
 		// this is the case in which there is no backlog visible.
