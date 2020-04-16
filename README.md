@@ -64,7 +64,7 @@ spec:
   queueURI: https://sqs.ap-south-1.amazonaws.com/{{aws_account_id}}/{{queue_prefix-queue_name-queue_suffix}}
   targetMessagesPerWorker: 2
   secondsToProcessOneJob: 0.03
-  minAvailableReplicas: 0
+  maxDisruption: "100%"
 ```
 
 ### Flags documentation:
@@ -73,8 +73,14 @@ spec:
 - **deploymentName**: name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
 - **queueURI**: full URL of the queue. (mandatory)
 - **targetMessagesPerWorker**: Number of jobs in the queue which have not been picked up by the workers. This also used to calculate the desired number of workers. (mandatory)
-- **secondsToProcessOneJob:**: secondsToProcessOneJob specifies seconds require to process one job by one worker process. `secondsToProcessOneJob * 60` gives the number of jobs that can be processed in a minute by a single worker. We use this metric in combination with `messages sent to the queue` metric to find the desired number of minimum workers. Default of the metric is 0.0. in which case **this functionality of calculating minimum becomes disabled** for you. We recommend to specify this value as it helps in accurate calculation of desired workers. This is very useful for workers which process really fast and have messages in the queue(ApproximateNumberOfMessagesVisible in case of SQS) as zero. (optional, highly recommended)
-- **minAvailableReplicas:** this specifies the worker disruption budget. Minimum number of pods that should be available at all times. Scale down can only happen to a value greater than `minAvailableReplicas`. By default workers are expected to be idempotent and can tolerate disruptions due to scale down. So the default is 0 i.e. scale down can happen when some workers are doing the processing. [MoreInfo](https://github.com/practo/k8s-worker-pod-autoscaler/issues/50). **If your workers which are doing the processing cannot tolerate the disruption due to scale down, set this value accordingly.** (optional, default=0)
+- **secondsToProcessOneJob:**: This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds. (optional, highly recommended, default=0.0 i.e. disabled)
+- **maxDisruption:** amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity. Using this you can control how fast a scale down can happen. This can be expressed both as an absolute value and a percentage. Explained with the help of some examples: (optional, default is the WPA flag `wpa-default-max-disruption`)
+```
+min=2, max=1000, current=500, maxDisruption=50%: then the scale down cannot bring down more than 250 pods in a single scale down activity.
+```
+```
+min=2, max=1000, current=500, maxDisruption=125: then the scale down cannot bring down more than 125 pods in a single scale down activity.
+```
 
 ## WPA Controller
 
@@ -89,18 +95,28 @@ Examples:
   workerpodautoscaler run
 
 Flags:
-      --aws-regions string            comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
-      --k8s-api-burst int              maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
-      --k8s-api-qps float              qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
-  -h, --help                          help for run
-      --kube-config string            path of the kube config file, if not specified in cluster config is used
-      --metrics-port string           specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
-      --resync-period int             sync period for the worker pod autoscaler (default 20)
-      --sqs-long-poll-interval int    the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
-      --sqs-short-poll-interval int   the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
-      --wpa-threads int               wpa threadiness, number of threads to process wpa resources (default 10)
+      --aws-regions string                  comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
+  -h, --help                                help for run
+      --k8s-api-burst int                   maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
+      --k8s-api-qps float                   qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
+      --kube-config string                  path of the kube config file, if not specified in cluster config is used
+      --metrics-port string                 specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
+      --resync-period int                   sync period for the worker pod autoscaler (default 20)
+      --sqs-long-poll-interval int          the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
+      --sqs-short-poll-interval int         the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
+      --wpa-default-max-disruption string   it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage. (default "100%")
+      --wpa-threads int                     wpa threadiness, number of threads to process wpa resources (default 10)
 ```
-**Note:** `k8s-api-burst` and `k8s-api-qps` flags may need to be tweaked when you are running WPA at scale.
+
+### Troubleshoot (running WPA at scale)
+
+Running WPA at scale require changes in `--k8s-api-burst` and `--k8s-api-qps` flags.
+
+WPA makes update to Kubernetes API to update the WPA status. WPA uses [client-go](https://github.com/kubernetes/client-go) as the kubernetes client to make Kubernetes API calls. This client allows 5QPS and 10Burst requests to Kubernetes API by default. The defaults can be changed by using `k8s-api-burst` and `k8s-api-qps` flags.
+
+You may need to increase the `--k8s-api-qps` and `k8s-api-burst` if [wpa_controller_loop_duration_seconds](https://github.com/practo/k8s-worker-pod-autoscaler/tree/master#wpa-metrics) is greater than 200ms (wpa_controller_loop_duration_seconds>0.200)
+
+For ~800 WPA resources, 100 QPS keeps the `wpa_controller_loop_duration_seconds<0.200`
 
 ## WPA Metrics
 
@@ -108,7 +124,7 @@ WPA emits the following prometheus metrics at `:8787/metrics`.
 ```
 wpa_controller_loop_count_success{workerpodautoscaler="example-wpa", namespace="example-namespace"} 23140
 wpa_controller_loop_duration_seconds{workerpodautoscaler="example-wpa", namespace="example-namespace"} 0.39
-go_goroutines{endpoint="workerpodautoscaler-metrics"}	5843
+go_goroutines{endpoint="workerpodautoscaler-metrics"} 40
 ```
 
 If you have [ServiceMonitor](https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/getting-started.md) installed in your cluster. You can bring these metrics to Prometheus by running the following:

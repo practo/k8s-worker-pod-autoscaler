@@ -49,6 +49,7 @@ func (v *runCmd) new() *cobra.Command {
 	flagNames := []string{
 		"resync-period",
 		"wpa-threads",
+		"wpa-default-max-disruption",
 		"aws-regions",
 		"kube-config",
 		"sqs-short-poll-interval",
@@ -60,6 +61,7 @@ func (v *runCmd) new() *cobra.Command {
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
 	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
+	flags.String("wpa-default-max-disruption", "100%", "it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage.")
 	flags.String("aws-regions", "ap-south-1,ap-southeast-1", "comma separated aws regions of SQS")
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
@@ -90,6 +92,7 @@ func parseRegions(regionNames string) []string {
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	resyncPeriod := time.Second * time.Duration(v.Viper.GetInt("resync-period"))
 	wpaThraeds := v.Viper.GetInt("wpa-threads")
+	wpaDefaultMaxDisruption := v.Viper.GetString("wpa-default-max-disruption")
 	awsRegions := parseRegions(v.Viper.GetString("aws-regions"))
 	kubeConfigPath := v.Viper.GetString("kube-config")
 	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
@@ -150,6 +153,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	controller := workerpodautoscalercontroller.NewController(kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
 		customInformerFactory.K8s().V1alpha1().WorkerPodAutoScalers(),
+		wpaDefaultMaxDisruption,
 		queues,
 	)
 
