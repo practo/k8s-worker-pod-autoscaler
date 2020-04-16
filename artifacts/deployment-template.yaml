@@ -40,7 +40,7 @@ spec:
        - --sqs-long-poll-interval=20
        - --k8s-api-qps=5.0
        - --k8s-api-burst=10
-       - --wpa-default-max-disruption="100%"
+       - --wpa-default-max-disruption=100%
        resources:
          limits:
            cpu: 100m
