@@ -28,7 +28,7 @@ spec:
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
        - name: AWS_SECRET_ACCESS_KEY
          value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: practodev/workerpodautoscaler:v0.2.2
+       image: practodev/workerpodautoscaler:v1.0.0-beta
        imagePullPolicy: Always
        command:
        - /workerpodautoscaler
