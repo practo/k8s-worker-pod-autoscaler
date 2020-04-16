@@ -151,7 +151,7 @@ Kubernetes does support custom metric scaling using Horizontal Pod Autoscaler. B
 
 ## Release
 
-- Decide a `tag` and bump up the `tag` [here](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/artifacts/deployment-template.yaml#L26) and create and merge the pull request.
+- Decide a `tag` and bump up the `tag` [here](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/artifacts/deployment-template.yaml#L31) and create and merge the pull request.
 
 - Get the latest master code.
 ```
@@ -164,11 +164,11 @@ git pull origin master
 - Build and push the image to `hub.docker.com/practodev`. Note: practodev push access is required.
 ```
 git fetch --tags
-git tag v0.2.2
+git tag v1.0.0-beta
 make push
 ```
 
-- Create a Release in Github. Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v0.2.0 and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
+- Create a Release in Github. Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.0.0-beta and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
 
 -  Publish the release in Github 🎉
 
@@ -180,7 +180,7 @@ kubectl edit deployment -n kube-system workerpodautoscaler
 ```
 
 ## Contributing
-It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L8) implementation needs to be written down to make that possible.
+It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L14) implementation needs to be written down to make that possible.
 
 - After making code changes, run the below commands to build and run locally.
 ```
