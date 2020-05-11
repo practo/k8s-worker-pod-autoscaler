@@ -135,11 +135,7 @@ func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	idleWorkers := 0
 	messagesReceived := int32(-1)
-	messagesReceived, err := b.receiveQueueLength(queueSpec.uri)
-	if err != nil {
-		klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
-
-	}
+	messagesReceived, _ = b.receiveQueueLength(queueSpec.uri)
 
 	if messagesReceived == 0 || messagesReceived < queueSpec.workers {
 		idleWorkers = 1
