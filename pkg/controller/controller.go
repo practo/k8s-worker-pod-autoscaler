@@ -408,6 +408,8 @@ func (c *Controller) updateWorkerPodAutoScalerStatus(
 	availableReplicas int32,
 	queueMessages int32) error {
 
+	return nil
+
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
