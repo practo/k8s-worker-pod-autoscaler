@@ -103,6 +103,16 @@ func (in *WorkerPodAutoScalerSpec) DeepCopyInto(out *WorkerPodAutoScalerSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.MaxDisruption != nil {
+		in, out := &in.MaxDisruption, &out.MaxDisruption
+		*out = new(string)
+		**out = **in
+	}
+	if in.SecondsToProcessOneJob != nil {
+		in, out := &in.SecondsToProcessOneJob, &out.SecondsToProcessOneJob
+		*out = new(float64)
+		**out = **in
+	}
 	return
 }
 

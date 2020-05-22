@@ -26,13 +26,21 @@ type SQS struct {
 	shortPollInterval time.Duration
 	longPollInterval  int64
 
-	// cache the numberOfEmptyReceives as it is refreshed
-	// in aws every 5minutes - save un-necessary api calls
-	cache               map[string]float64
-	cacheValidity       time.Duration
-	cacheListCh         chan chan map[string]float64
-	cacheUpdateCh       chan map[string]float64
-	lastCachedTimestamp int64
+	// cache the numberOfSentMessages as it is refreshed
+	// in aws every 1minute - prevent un-necessary api calls
+	cacheSentMessages              map[string]float64
+	cacheSentMessagesValidity      time.Duration
+	cacheSentMessagesListCh        chan chan map[string]float64
+	cacheSentMessagesUpdateCh      chan map[string]float64
+	cacheSentMessageslastTimestamp int64
+
+	// cache the numberOfReceiveMessages as it is refreshed
+	// in aws every 1minute - prevent un-necessary api calls
+	cacheReceiveMessages              map[string]float64
+	cacheReceiveMessagesValidity      time.Duration
+	cacheReceiveMessagesListCh        chan chan map[string]float64
+	cacheReceiveMessagesUpdateCh      chan map[string]float64
+	cacheReceiveMessageslastTimestamp int64
 }
 
 func NewSQS(
@@ -64,10 +72,15 @@ func NewSQS(
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
 
-		cache:         make(map[string]float64),
-		cacheValidity: time.Second * time.Duration(300),
-		cacheListCh:   make(chan chan map[string]float64),
-		cacheUpdateCh: make(chan map[string]float64),
+		cacheSentMessages:         make(map[string]float64),
+		cacheSentMessagesValidity: time.Second * time.Duration(60),
+		cacheSentMessagesListCh:   make(chan chan map[string]float64),
+		cacheSentMessagesUpdateCh: make(chan map[string]float64),
+
+		cacheReceiveMessages:         make(map[string]float64),
+		cacheReceiveMessagesValidity: time.Second * time.Duration(60),
+		cacheReceiveMessagesListCh:   make(chan chan map[string]float64),
+		cacheReceiveMessagesUpdateCh: make(chan map[string]float64),
 	}, nil
 }
 
@@ -160,9 +173,9 @@ func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
 	return int32(i64), nil
 }
 
-func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
-	period := int64(300)
-	duration, err := time.ParseDuration("-5m")
+func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
+	period := int64(60)
+	duration, err := time.ParseDuration("-10m")
 	if err != nil {
 		return 0.0, err
 	}
@@ -174,7 +187,7 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 		MetricStat: &cloudwatch.MetricStat{
 			Metric: &cloudwatch.Metric{
 				Namespace:  aws.String("AWS/SQS"),
-				MetricName: aws.String("NumberOfEmptyReceives"),
+				MetricName: aws.String("NumberOfMessagesReceived"),
 				Dimensions: []*cloudwatch.Dimension{
 					&cloudwatch.Dimension{
 						Name:  aws.String("QueueName"),
@@ -183,7 +196,7 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 				},
 			},
 			Period: &period,
-			Stat:   aws.String("p99"),
+			Stat:   aws.String("Sum"),
 		},
 	}
 
@@ -206,61 +219,33 @@ func (s *SQS) numberOfEmptyReceives(queueURI string) (float64, error) {
 	}
 
 	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
-		return *result.MetricDataResults[0].Values[0], nil
+		var sum float64
+		for i := 0; i < len(result.MetricDataResults[0].Values); i++ {
+			sum += *result.MetricDataResults[0].Values[i]
+		}
+		return sum, nil
 	}
 
-	klog.Errorf("Number Of Empty Receives API returned empty result for uri: %q", queueURI)
+	klog.Errorf("NumberOfMessagesReceived Cloudwatch API returned empty result for uri: %q", queueURI)
 
 	return 0.0, nil
-}
-
-func (s *SQS) cachedNumberOfEmptyReceives(queueURI string) (float64, error) {
-	now := time.Now().UnixNano()
-	if (s.lastCachedTimestamp + s.cacheValidity.Nanoseconds()) > now {
-		cache, cacheHit := s.getCache(queueURI)
-		if cacheHit {
-			return cache, nil
-		}
-	}
-
-	emptyReceives, err := s.numberOfEmptyReceives(queueURI)
-	if err != nil {
-		return emptyReceives, err
-	}
-	s.updateCache(queueURI, emptyReceives)
-	s.lastCachedTimestamp = now
-	return emptyReceives, nil
-}
-
-func (s *SQS) listAllCache() map[string]float64 {
-	cacheResultCh := make(chan map[string]float64)
-	s.cacheListCh <- cacheResultCh
-	return <-cacheResultCh
-}
-
-func (s *SQS) getCache(queueURI string) (float64, bool) {
-	allCache := s.listAllCache()
-	if cache, ok := allCache[queueURI]; ok {
-		return cache, true
-	}
-	return 0.0, false
-}
-
-func (s *SQS) updateCache(key string, cache float64) {
-	s.cacheUpdateCh <- map[string]float64{
-		key: cache,
-	}
 }
 
 func (s *SQS) Sync(stopCh <-chan struct{}) {
 	for {
 		select {
-		case update := <-s.cacheUpdateCh:
+		case update := <-s.cacheSentMessagesUpdateCh:
 			for key, value := range update {
-				s.cache[key] = value
+				s.cacheSentMessages[key] = value
 			}
-		case cacheResultCh := <-s.cacheListCh:
-			cacheResultCh <- s.cache
+		case update := <-s.cacheReceiveMessagesUpdateCh:
+			for key, value := range update {
+				s.cacheReceiveMessages[key] = value
+			}
+		case cacheResultCh := <-s.cacheSentMessagesListCh:
+			cacheResultCh <- s.cacheSentMessages
+		case cacheResultCh := <-s.cacheReceiveMessagesListCh:
+			cacheResultCh <- s.cacheReceiveMessages
 		case <-stopCh:
 			klog.Info("Stopping sqs syncer gracefully.")
 			return
@@ -268,16 +253,142 @@ func (s *SQS) Sync(stopCh <-chan struct{}) {
 	}
 }
 
+func (s *SQS) listAllSentMessageCache() map[string]float64 {
+	cacheResultCh := make(chan map[string]float64)
+	s.cacheSentMessagesListCh <- cacheResultCh
+	return <-cacheResultCh
+}
+
+func (s *SQS) getSentMessageCache(queueURI string) (float64, bool) {
+	allCache := s.listAllSentMessageCache()
+	if cache, ok := allCache[queueURI]; ok {
+		return cache, true
+	}
+	return 0.0, false
+}
+
+func (s *SQS) updateSentMessageCache(key string, cache float64) {
+	s.cacheSentMessagesUpdateCh <- map[string]float64{
+		key: cache,
+	}
+}
+
+func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
+	now := time.Now().UnixNano()
+	if (s.cacheSentMessageslastTimestamp + s.cacheSentMessagesValidity.Nanoseconds()) > now {
+		cache, cacheHit := s.getSentMessageCache(queueURI)
+		if cacheHit {
+			return cache, nil
+		}
+	}
+
+	messagesSent, err := s.getAverageNumberOfMessagesSent(queueURI)
+	if err != nil {
+		return messagesSent, err
+	}
+	s.updateSentMessageCache(queueURI, messagesSent)
+	s.cacheSentMessageslastTimestamp = now
+	return messagesSent, nil
+}
+
+func (s *SQS) listAllReceiveMessageCache() map[string]float64 {
+	cacheResultCh := make(chan map[string]float64)
+	s.cacheReceiveMessagesListCh <- cacheResultCh
+	return <-cacheResultCh
+}
+
+func (s *SQS) getReceiveMessageCache(queueURI string) (float64, bool) {
+	allCache := s.listAllReceiveMessageCache()
+	if cache, ok := allCache[queueURI]; ok {
+		return cache, true
+	}
+	return 0.0, false
+}
+
+func (s *SQS) updateReceiveMessageCache(key string, cache float64) {
+	s.cacheReceiveMessagesUpdateCh <- map[string]float64{
+		key: cache,
+	}
+}
+
+func (s *SQS) cachedNumberOfReceiveMessages(queueURI string) (float64, error) {
+	now := time.Now().UnixNano()
+	if (s.cacheReceiveMessageslastTimestamp + s.cacheReceiveMessagesValidity.Nanoseconds()) > now {
+		cache, cacheHit := s.getReceiveMessageCache(queueURI)
+		if cacheHit {
+			return cache, nil
+		}
+	}
+
+	messagesReceived, err := s.getNumberOfMessagesReceived(queueURI)
+	if err != nil {
+		return messagesReceived, err
+	}
+	s.updateReceiveMessageCache(queueURI, messagesReceived)
+	s.cacheReceiveMessageslastTimestamp = now
+	return messagesReceived, nil
+}
+
+func (s *SQS) getAverageNumberOfMessagesSent(queueURI string) (float64, error) {
+	period := int64(60)
+	duration, err := time.ParseDuration("-5m")
+	if err != nil {
+		return 0.0, err
+	}
+	endTime := time.Now().Add(duration)
+	startTime := endTime.Add(duration)
+
+	query := &cloudwatch.MetricDataQuery{
+		Id: aws.String("id1"),
+		MetricStat: &cloudwatch.MetricStat{
+			Metric: &cloudwatch.Metric{
+				Namespace:  aws.String("AWS/SQS"),
+				MetricName: aws.String("NumberOfMessagesSent"),
+				Dimensions: []*cloudwatch.Dimension{
+					&cloudwatch.Dimension{
+						Name:  aws.String("QueueName"),
+						Value: aws.String(path.Base(queueURI)),
+					},
+				},
+			},
+			Period: &period,
+			Stat:   aws.String("Sum"),
+		},
+	}
+
+	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
+		EndTime:           &endTime,
+		StartTime:         &startTime,
+		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
+	})
+
+	if err != nil {
+		return 0.0, err
+	}
+
+	if len(result.MetricDataResults) > 1 {
+		return 0.0, fmt.Errorf("Expecting cloudwatch metric to return single data point")
+	}
+
+	if result.MetricDataResults[0].Values != nil && len(result.MetricDataResults[0].Values) > 0 {
+		var sum float64
+		for i := 0; i < len(result.MetricDataResults[0].Values); i++ {
+			sum += *result.MetricDataResults[0].Values[i]
+		}
+		return sum / float64(len(result.MetricDataResults[0].Values)), nil
+	}
+
+	klog.Errorf("NumberOfMessagesSent Cloudwatch API returned empty result for uri: %q", queueURI)
+
+	return 0.0, nil
+}
+
 func (s *SQS) waitForShortPollInterval() {
 	time.Sleep(s.shortPollInterval)
 }
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
-	if !strings.Contains(queueSpec.uri, "sqs") {
-
-		return
-	}
-	if queueSpec.workers == 0 && queueSpec.messages == 0 {
+	if queueSpec.workers == 0 && queueSpec.messages == 0 && queueSpec.messagesSentPerMinute == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
 		// If there are no workers running we do a long poll to find a job(s)
@@ -302,6 +413,16 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 		s.queues.updateMessage(key, messagesReceived)
 		return
+	}
+
+	if queueSpec.secondsToProcessOneJob != 0.0 {
+		messagesSentPerMinute, err := s.cachedNumberOfSentMessages(queueSpec.uri)
+		if err != nil {
+			klog.Fatalf("Unable to fetch no of messages to the queue %q, %v.",
+				queueSpec.name, err)
+		}
+		s.queues.updateMessageSent(key, messagesSentPerMinute)
+		klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
 	}
 
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)
@@ -347,26 +468,25 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		s.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 	}
 
-	// emptyReceives is queried to find if there are idle workers and scale down to
-	// minimum workers, so scale down.
-	// TODO: Continuously high throughout workers are impacted by this and does not scale down
-	// to a lower value even if it is possible
-	emptyReceives, err := s.cachedNumberOfEmptyReceives(queueSpec.uri)
+	numberOfMessagesReceived, err := s.cachedNumberOfReceiveMessages(queueSpec.uri)
 	if err != nil {
-		klog.Errorf("Unable to fetch empty receive metric for queue %q, %v.",
+		klog.Errorf("Unable to fetch no of received messages for queue %q, %v.",
 			queueSpec.name, err)
+		time.Sleep(100 * time.Millisecond)
+		return
 	}
 
 	var idleWorkers int32
-	if emptyReceives == 1.0 && approxMessagesNotVisible <= 0 {
+	if numberOfMessagesReceived == 0.0 {
+		// this will result in all workers getting scaled down
 		idleWorkers = queueSpec.workers
 	} else {
 		idleWorkers = 0
 	}
 
-	klog.Infof("%s: emptyReceives=%f, workers=%d, idleWorkers=%d",
+	klog.Infof("%s: msgsReceived=%f, workers=%d, idleWorkers=%d",
 		queueSpec.name,
-		emptyReceives,
+		numberOfMessagesReceived,
 		queueSpec.workers,
 		idleWorkers,
 	)

@@ -1,4 +1,4 @@
-apiVersion: apps/v1 
+apiVersion: apps/v1
 kind: Deployment
 metadata:
  name: workerpodautoscaler
@@ -28,7 +28,7 @@ spec:
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
        - name: AWS_SECRET_ACCESS_KEY
          value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: practodev/workerpodautoscaler:v0.2.2
+       image: practodev/workerpodautoscaler:v1.0.0-beta
        imagePullPolicy: Always
        command:
        - /workerpodautoscaler
@@ -38,6 +38,9 @@ spec:
        - --aws-regions={{ WPA_AWS_REGIONS }}
        - --sqs-short-poll-interval=20
        - --sqs-long-poll-interval=20
+       - --k8s-api-qps=5.0
+       - --k8s-api-burst=10
+       - --wpa-default-max-disruption=100%
        resources:
          limits:
            cpu: 100m

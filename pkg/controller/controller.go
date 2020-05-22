@@ -3,11 +3,12 @@ package controller
 import (
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
@@ -55,6 +56,33 @@ const (
 	WokerPodAutoScalerEventDelete = "delete"
 )
 
+var (
+	loopDurationSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "controller",
+			Name:      "loop_duration_seconds",
+			Help:      "Number of seconds to complete the control loop succesfully, partitioned by wpa name and namespace",
+		},
+		[]string{"workerpodautoscaler", "namespace"},
+	)
+
+	loopCountSuccess = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "wpa",
+			Subsystem: "controller",
+			Name:      "loop_count_success",
+			Help:      "How many times the control loop executed succesfully, partitioned by wpa name and namespace",
+		},
+		[]string{"workerpodautoscaler", "namespace"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(loopDurationSeconds)
+	prometheus.MustRegister(loopCountSuccess)
+}
+
 type WokerPodAutoScalerEvent struct {
 	key  string
 	name string
@@ -65,13 +93,11 @@ type Controller struct {
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
 	// customclientset is a clientset for our own API group
-	customclientset clientset.Interface
-
+	customclientset            clientset.Interface
 	deploymentsLister          appslisters.DeploymentLister
 	deploymentsSynced          cache.InformerSynced
 	workerPodAutoScalersLister listers.WorkerPodAutoScalerLister
 	workerPodAutoScalersSynced cache.InformerSynced
-
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
 	// means we can ensure we only process a fixed amount of resources at a
@@ -81,7 +107,12 @@ type Controller struct {
 	// recorder is an event recorder for recording Event resources to the
 	// Kubernetes API.
 	recorder record.EventRecorder
-
+	// defaultMaxDisruption
+	// it is the default value for the maxDisruption in the WPA spec.
+	// This specifies how much percentage of pods can be disrupted in a
+	// single scale down acitivity.
+	// Can be expressed as integers or as a percentage.
+	defaultMaxDisruption string
 	// QueueList keeps the list of all the queues in memeory
 	// which is used by the core controller and the sqs exporter
 	Queues *queue.Queues
@@ -93,6 +124,7 @@ func NewController(
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
 	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
+	defaultMaxDisruption string,
 	queues *queue.Queues) *Controller {
 
 	// Create event broadcaster
@@ -114,6 +146,7 @@ func NewController(
 		workerPodAutoScalersSynced: workerPodAutoScalerInformer.Informer().HasSynced,
 		workqueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "WorkerPodAutoScalers"),
 		recorder:                   recorder,
+		defaultMaxDisruption:       defaultMaxDisruption,
 		Queues:                     queues,
 	}
 
@@ -226,6 +259,7 @@ func (c *Controller) processNextWorkItem() bool {
 // converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
+	now := time.Now()
 	key := event.key
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -271,11 +305,28 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	workers := *deployment.Spec.Replicas
 
+	var secondsToProcessOneJob float64
+	if workerPodAutoScaler.Spec.SecondsToProcessOneJob != nil {
+		secondsToProcessOneJob = *workerPodAutoScaler.Spec.SecondsToProcessOneJob
+	}
+
 	switch event.name {
 	case WokerPodAutoScalerEventAdd:
-		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
+		err = c.Queues.Add(
+			namespace,
+			name,
+			workerPodAutoScaler.Spec.QueueURI,
+			workers,
+			secondsToProcessOneJob,
+		)
 	case WokerPodAutoScalerEventUpdate:
-		err = c.Queues.Add(namespace, name, workerPodAutoScaler.Spec.QueueURI, workers)
+		err = c.Queues.Add(
+			namespace,
+			name,
+			workerPodAutoScaler.Spec.QueueURI,
+			workers,
+			secondsToProcessOneJob,
+		)
 	case WokerPodAutoScalerEventDelete:
 		err = c.Queues.Delete(namespace, name)
 	}
@@ -284,18 +335,22 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
-	queueName, queueMessages, idleWorkers := c.Queues.GetQueueInfo(namespace, name)
+	queueName, queueMessages, messagesSentPerMinute, idleWorkers := c.Queues.GetQueueInfo(
+		namespace, name)
 	if queueName == "" {
 		return nil
 	}
 
 	desiredWorkers := c.getDesiredWorkers(
 		queueMessages,
+		messagesSentPerMinute,
+		secondsToProcessOneJob,
 		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
 		deployment.Status.AvailableReplicas,
 		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
+		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
 	klog.Infof("%s: messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
 
@@ -305,22 +360,24 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
-	err = c.updateWorkerPodAutoScalerStatus(
+	updateWorkerPodAutoScalerStatus(
+		name,
+		namespace,
+		c.customclientset,
 		desiredWorkers,
 		workerPodAutoScaler,
 		deployment.Status.AvailableReplicas,
 		queueMessages,
 	)
-	if err != nil {
-		// TODO: till the api server has https://github.com/kubernetes/kubernetes/pull/72856 fix
-		// ignore this error
-		// this was fixed in 1.13.1 release
-		if strings.Contains(err.Error(), "0-length response with status code: 200 and content type:") {
-			klog.Errorf("Error updating status of wpa (1.13 apiserver has the fix): %v", err)
-			return nil
-		}
-		klog.Fatalf("Error updating status of wpa: %v", err)
-	}
+
+	loopDurationSeconds.WithLabelValues(
+		name,
+		namespace,
+	).Set(time.Since(now).Seconds())
+	loopCountSuccess.WithLabelValues(
+		name,
+		namespace,
+	).Inc()
 
 	// TODO: organize and log events
 	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
@@ -352,47 +409,162 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 	}
 }
 
+// getMaxDisruptableWorkers gets the maximum number of workers that can
+// be scaled down in the single scale down activity.
+func getMaxDisruptableWorkers(
+	maxDisruption *string,
+	currentWorkers int32) int32 {
+
+	if maxDisruption == nil {
+		klog.Fatalf("maxDisruption default is not being set. Exiting")
+	}
+
+	maxDisruptionIntOrStr := intstr.Parse(*maxDisruption)
+	maxDisruptableWorkers, err := intstr.GetValueFromIntOrPercent(
+		&maxDisruptionIntOrStr, int(currentWorkers), true,
+	)
+
+	if err != nil {
+		klog.Fatalf("Error calculating maxDisruptable workers, err: %v", err)
+	}
+
+	return int32(maxDisruptableWorkers)
+}
+
+// getMinWorkers gets the min workers based on the
+// velocity metric: messagesSentPerMinute
+func getMinWorkers(
+	messagesSentPerMinute float64,
+	minWorkers int32,
+	secondsToProcessOneJob float64) int32 {
+
+	// disable this feature for WPA queues which have not specified
+	// processing time
+	if secondsToProcessOneJob == 0.0 {
+		return minWorkers
+	}
+
+	workersBasedOnMessagesSent := int32(math.Ceil((secondsToProcessOneJob * messagesSentPerMinute) / 60))
+	//klog.Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
+	if workersBasedOnMessagesSent > minWorkers {
+		return workersBasedOnMessagesSent
+	}
+	return minWorkers
+}
+
 // getDesiredWorkers finds the desired number of workers which are required
 // test case run: https://play.golang.org/p/_dFbbhb1J_8
 func (c *Controller) getDesiredWorkers(
 	queueMessages int32,
+	messagesSentPerMinute float64,
+	secondsToProcessOneJob float64,
 	targetMessagesPerWorker int32,
 	currentWorkers int32,
 	idleWorkers int32,
 	minWorkers int32,
-	maxWorkers int32) int32 {
+	maxWorkers int32,
+	maxDisruption *string) int32 {
+
+	// overwrite the minimum workers needed based on
+	// messagesSentPerMinute and secondsToProcessOneJob
+	// this feature is disabled if secondsToProcessOneJob is not set or is 0.0
+	minWorkers = getMinWorkers(
+		messagesSentPerMinute,
+		minWorkers,
+		secondsToProcessOneJob,
+	)
+
+	// gets the maximum number of workers that can be scaled down in a
+	// single scale down activity.
+	maxDisruptableWorkers := getMaxDisruptableWorkers(
+		maxDisruption, currentWorkers,
+	)
 
 	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
-
 	if currentWorkers == 0 {
 		desiredWorkers := int32(math.Ceil(usageRatio))
-		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		)
 	}
 
 	if queueMessages > 0 && idleWorkers <= 0 {
 		// return the current replicas if the change would be too small
-		if math.Abs(1.0-usageRatio) <= tolerance {
-			return currentWorkers
-		}
-		if queueMessages < targetMessagesPerWorker {
-			return currentWorkers
+		if (math.Abs(1.0-usageRatio) <= tolerance) || (queueMessages < targetMessagesPerWorker) {
+			// desired is same as current in this scenario
+			return convertDesiredReplicasWithRules(
+				currentWorkers,
+				currentWorkers,
+				minWorkers,
+				maxWorkers,
+				maxDisruptableWorkers,
+			)
 		}
 
-		desiredWorkers := int32(math.Ceil(usageRatio))
-		// to prevent scaling down of workers which could be doing processing
-
-		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
+		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		)
+	} else if messagesSentPerMinute > 0 && secondsToProcessOneJob > 0.0 {
+		// this is the case in which there is no backlog visible.
+		// (mostly because the workers picks up jobs very quickly)
+		// But the queue has throughput, so we return the minWorkers.
+		// Note: minWorkers is updated based on
+		// messagesSentPerMinute and secondsToProcessOneJob
+		// desried is the minReplicas in this scenario
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			minWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		)
 	}
 
+	// Attempt for massive scale down
 	if idleWorkers > 0 {
 		desiredWorkers := currentWorkers - idleWorkers
-		return convertDesiredReplicasWithRules(desiredWorkers, minWorkers, maxWorkers)
+		// for massive scale down to happen maxDisruptableWorkers
+		// should be ignored
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			currentWorkers,
+		)
 	}
-	return currentWorkers
+
+	// Attempt to do nothing, desired is same as current
+	return convertDesiredReplicasWithRules(
+		currentWorkers,
+		currentWorkers,
+		minWorkers,
+		maxWorkers,
+		maxDisruptableWorkers,
+	)
 }
 
-func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 {
+func convertDesiredReplicasWithRules(
+	current int32,
+	desired int32,
+	min int32,
+	max int32,
+	maxDisruptable int32) int32 {
+
+	if (current - desired) > maxDisruptable {
+		desired = current - maxDisruptable
+	}
+
 	if desired > max {
 		return max
 	}
@@ -402,13 +574,23 @@ func convertDesiredReplicasWithRules(desired int32, min int32, max int32) int32 
 	return desired
 }
 
-func (c *Controller) updateWorkerPodAutoScalerStatus(
+func updateWorkerPodAutoScalerStatus(
+	name string,
+	namespace string,
+	customclientset clientset.Interface,
 	desiredWorkers int32,
 	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
 	availableReplicas int32,
-	queueMessages int32) error {
+	queueMessages int32) {
 
-	return nil
+	if workerPodAutoScaler.Status.CurrentReplicas == availableReplicas &&
+		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
+		workerPodAutoScaler.Status.CurrentMessages == queueMessages {
+		klog.Infof("%s/%s: WPA status is already up to date\n", namespace, name)
+		return
+	} else {
+		klog.Infof("%s/%s: Updating wpa status\n", namespace, name)
+	}
 
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
@@ -421,8 +603,13 @@ func (c *Controller) updateWorkerPodAutoScalerStatus(
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := c.customclientset.K8sV1alpha1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
-	return err
+	_, err := customclientset.K8sV1alpha1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
+	if err != nil {
+		klog.Errorf("Error updating wpa status, err: %v", err)
+		return
+	}
+	klog.Infof("%s/%s: Updated wpa status\n", namespace, name)
+	return
 }
 
 // getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name

@@ -10,5 +10,11 @@ const (
 
 type QueuingService interface {
 	Sync(stopCh <-chan struct{})
+	// poll functions polls the queue service provider is responsible to update
+	// the queueSpec with the polled information
+	// informations it updates are
+	// 1. updateMessageSent(key, messagesSentPerMinute) i.e messagesSentPerMinute
+	// 2. updateIdleWorkers(key, -1) i.e tells how many workers are idle
+	// 3. updateMessage(key, approxMessagesVisible) i.e queuedMessages
 	poll(key string, queueSpec QueueSpec)
 }
