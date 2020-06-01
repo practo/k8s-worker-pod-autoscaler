@@ -342,6 +342,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	}
 
 	desiredWorkers := c.getDesiredWorkers(
+		queueName,
 		queueMessages,
 		messagesSentPerMinute,
 		secondsToProcessOneJob,
@@ -455,6 +456,7 @@ func getMinWorkers(
 // getDesiredWorkers finds the desired number of workers which are required
 // test case run: https://play.golang.org/p/_dFbbhb1J_8
 func (c *Controller) getDesiredWorkers(
+	queueName string,
 	queueMessages int32,
 	messagesSentPerMinute float64,
 	secondsToProcessOneJob float64,
@@ -479,6 +481,7 @@ func (c *Controller) getDesiredWorkers(
 	maxDisruptableWorkers := getMaxDisruptableWorkers(
 		maxDisruption, currentWorkers,
 	)
+	klog.Infof("%s minWorkers=%v, maxDisruptableWorkers=%v\n", queueName, minWorkers, maxDisruptableWorkers)
 
 	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
