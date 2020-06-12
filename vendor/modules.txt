@@ -37,6 +37,9 @@ github.com/aws/aws-sdk-go/service/cloudwatch
 github.com/aws/aws-sdk-go/service/sqs
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
+# github.com/beanstalkd/go-beanstalk v0.0.0-20200526060843-1cc502ecaf3c
+## explicit
+github.com/beanstalkd/go-beanstalk
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
 # github.com/davecgh/go-spew v1.1.1
@@ -103,9 +106,6 @@ github.com/mitchellh/mapstructure
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
-# github.com/mpdroog/beanstalkd v0.0.0-20151231090228-bf387addf002
-## explicit
-github.com/mpdroog/beanstalkd
 # github.com/pelletier/go-toml v1.2.0
 github.com/pelletier/go-toml
 # github.com/prometheus/client_golang v0.9.3

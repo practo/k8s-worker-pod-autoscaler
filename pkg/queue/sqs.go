@@ -393,6 +393,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 			} else {
 				klog.Errorf("Unable to receive message from queue %q, %v.",
 					queueSpec.name, err)
+				return
 			}
 		}
 
@@ -405,6 +406,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		if err != nil {
 			klog.Errorf("Unable to fetch no of messages to the queue %q, %v.",
 				queueSpec.name, err)
+			return
 		}
 		s.queues.updateMessageSent(key, messagesSentPerMinute)
 		klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
@@ -423,6 +425,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		} else {
 			klog.Errorf("Unable to get approximate messages in queue %q, %v.",
 				queueSpec.name, err)
+			return
 		}
 	}
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
@@ -450,6 +453,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		} else {
 			klog.Errorf("Unable to get approximate messages not visible in queue %q, %v.",
 				queueSpec.name, err)
+			return
 		}
 	}
 	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)

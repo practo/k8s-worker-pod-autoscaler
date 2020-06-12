@@ -54,7 +54,8 @@ func (v *runCmd) new() *cobra.Command {
 		"kube-config",
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
-		"beanstalk-poll-interval",
+		"beanstalk-short-poll-interval",
+		"beanstalk-long-poll-interval",
 		"queue-services",
 		"metrics-port",
 		"k8s-api-qps",
@@ -68,7 +69,8 @@ func (v *runCmd) new() *cobra.Command {
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
-	flags.Int("beanstalk-poll-interval", 3, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
+	flags.Int("beanstalk-short-poll-interval", 3, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
+	flags.Int("beanstalk-long-poll-interval", 10, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
 	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
 
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
@@ -101,7 +103,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeConfigPath := v.Viper.GetString("kube-config")
 	sqsShortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	sqsLongPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
-	beanstalkPollInterval := v.Viper.GetInt("beanstalk-poll-interval")
+	beanstalkShortPollInterval := v.Viper.GetInt("beanstalk-short-poll-interval")
+	beanstalkLongPollInterval := v.Viper.GetInt("beanstalk-long-poll-interval")
 	queueServicesToStartWith := v.Viper.GetString("queue-services")
 	metricsPort := v.Viper.GetString("metrics-port")
 	k8sApiQPS := float32(v.Viper.GetFloat64("k8s-api-qps"))
@@ -154,7 +157,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 
 			queuingServices = append(queuingServices, sqs)
 		case queue.BeanstalkQueueService:
-			bs, err := queue.NewBeanstalk(queues, beanstalkPollInterval)
+			bs, err := queue.NewBeanstalk(queues, beanstalkShortPollInterval, beanstalkLongPollInterval)
 			if err != nil {
 				klog.Fatalf("Error creating bs Poller: %v", err)
 			}
