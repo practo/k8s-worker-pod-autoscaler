@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/mpdroog/beanstalkd"
@@ -14,7 +15,7 @@ import (
 // information from Beanstalk, it implements the QueuingService interface
 type Beanstalk struct {
 	queues       *Queues
-	bsClientPool map[string]*beanstalkd.BeanstalkdClient
+	bsClientPool *sync.Map
 
 	pollInterval int
 
@@ -33,7 +34,7 @@ func NewBeanstalk(
 
 	return &Beanstalk{
 		queues:       queues,
-		bsClientPool: make(map[string]*beanstalkd.BeanstalkdClient),
+		bsClientPool: new(sync.Map),
 
 		pollInterval: pollInterval,
 
@@ -45,26 +46,30 @@ func NewBeanstalk(
 }
 
 func (b *Beanstalk) getBeanstalkClient(queueURI string) (*beanstalkd.BeanstalkdClient, error) {
-	if b.bsClientPool[queueURI] == nil {
-		var host, port string
-
-		parsedURI, err := url.Parse(queueURI)
-		if err != nil {
-			return nil, err
-		}
-		if host = parsedURI.Hostname(); host == "" {
-			host = "localhost"
-		}
-		if port = parsedURI.Port(); port == "" {
-			port = "11300"
-		}
-		bsConn, err := beanstalkd.Dial(host + ":" + port)
-		if err != nil {
-			return nil, err
-		}
-		b.bsClientPool[queueURI] = bsConn
+	bsClient, _ := b.bsClientPool.Load(queueURI)
+	if bsClient != nil {
+		return bsClient.(*beanstalkd.BeanstalkdClient), nil
 	}
-	return b.bsClientPool[queueURI], nil
+
+	var host, port string
+	parsedURI, err := url.Parse(queueURI)
+	if err != nil {
+		return nil, err
+	}
+	if host = parsedURI.Hostname(); host == "" {
+		host = "localhost"
+	}
+	if port = parsedURI.Port(); port == "" {
+		port = "11300"
+	}
+
+	bsConn, err := beanstalkd.Dial(host + ":" + port)
+	if err != nil {
+		return nil, err
+	}
+	b.bsClientPool.Store(queueURI, bsConn)
+
+	return bsConn, nil
 }
 
 func (b *Beanstalk) receiveQueueLength(queueURI string) (int32, error) {

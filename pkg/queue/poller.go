@@ -59,11 +59,10 @@ func (p *Poller) listThreads() map[string]bool {
 	return <-listResultCh
 }
 
-func (p *Poller) sync(stopCh <-chan struct{}) {
+func (p *Poller) Sync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case listResultCh := <-p.listThreadCh:
-			time.Sleep(10 * time.Millisecond)
 			listResultCh <- DeepCopyThread(p.threads)
 		case threadStatus := <-p.updateThreadCh:
 			for key, status := range threadStatus {
@@ -80,16 +79,14 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 }
 
 func (p *Poller) Run(stopCh <-chan struct{}) {
-	go p.sync(stopCh)
-
 	ticker := time.NewTicker(time.Second * 1)
 	for {
 		select {
 		case <-ticker.C:
 			queues := p.queues.List()
-			threads := p.listThreads()
 			// Create a new thread
 			for key, _ := range queues {
+				threads := p.listThreads()
 				if _, ok := threads[key]; !ok {
 					p.updateThreads(key, true)
 					go p.runPollThread(key)
