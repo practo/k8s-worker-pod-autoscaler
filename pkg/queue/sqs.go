@@ -60,6 +60,7 @@ func NewSQS(
 		if err != nil {
 			return nil, err
 		}
+
 		sqsClientPool[region] = sqs.New(sess)
 		cwClientPool[region] = cloudwatch.New(sess)
 	}
@@ -93,11 +94,7 @@ func (s *SQS) getCWClient(queueURI string) *cloudwatch.CloudWatch {
 }
 
 func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
-	sqsClient := s.getSQSClient(queueURI)
-	if sqsClient == nil {
-		return 0, fmt.Errorf("Unable to fetch queue, check queue URL or permission")
-	}
-	result, err := sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
+	result, err := s.getSQSClient(queueURI).ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueURI),
 		AttributeNames: aws.StringSlice([]string{
 			"SentTimestamp",
@@ -118,11 +115,7 @@ func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
-	sqsClient := s.getSQSClient(queueURI)
-	if sqsClient == nil {
-		return 0, fmt.Errorf("Unable to fetch queue, check queue URL or permission")
-	}
-	result, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
 	})
@@ -146,11 +139,7 @@ func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessagesNotVisible(queueURI string) (int32, error) {
-	sqsClient := s.getSQSClient(queueURI)
-	if sqsClient == nil {
-		return 0, fmt.Errorf("Unable to make sqs client, check queue URL or permission")
-	}
-	result, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessagesNotVisible")},
 	})
@@ -200,11 +189,7 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 		},
 	}
 
-	cwClient := s.getCWClient(queueURI)
-	if cwClient == nil {
-		return 0, fmt.Errorf("Unable to fetch CloudWatch metric, check URL or permission")
-	}
-	result, err := cwClient.GetMetricData(&cloudwatch.GetMetricDataInput{
+	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
 		EndTime:           &endTime,
 		StartTime:         &startTime,
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
@@ -418,7 +403,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if queueSpec.secondsToProcessOneJob != 0.0 {
 		messagesSentPerMinute, err := s.cachedNumberOfSentMessages(queueSpec.uri)
 		if err != nil {
-			klog.Fatalf("Unable to fetch no of messages to the queue %q, %v.",
+			klog.Errorf("Unable to fetch no of messages to the queue %q, %v.",
 				queueSpec.name, err)
 		}
 		s.queues.updateMessageSent(key, messagesSentPerMinute)
@@ -443,6 +428,12 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 	s.queues.updateMessage(key, approxMessages)
 
+	if approxMessages != 0 {
+		s.queues.updateIdleWorkers(key, -1)
+		s.waitForShortPollInterval()
+		return
+	}
+
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
 	// do not scale down as those messages are still being processed (and we dont know which worker)
@@ -465,7 +456,8 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
-		s.queues.updateMessage(key, approxMessages)
+		s.waitForShortPollInterval()
+		return
 	}
 
 	numberOfMessagesReceived, err := s.cachedNumberOfReceiveMessages(queueSpec.uri)
