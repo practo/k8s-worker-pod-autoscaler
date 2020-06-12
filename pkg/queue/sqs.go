@@ -465,7 +465,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
-		s.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
+		s.queues.updateMessage(key, approxMessages)
 	}
 
 	numberOfMessagesReceived, err := s.cachedNumberOfReceiveMessages(queueSpec.uri)
