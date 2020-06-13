@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"net/url"
 	"path"
 	"strconv"
@@ -14,8 +15,8 @@ import (
 // Beanstalk is used to by the Poller to get the queue
 // information from Beanstalk, it implements the QueuingService interface
 type Beanstalk struct {
-	queues   *Queues
-	connPool *sync.Map
+	queues     *Queues
+	clientPool *sync.Map
 
 	shortPollInterval time.Duration
 	longPollInterval  int64
@@ -27,15 +28,15 @@ func NewBeanstalk(
 	longPollInterval int) (QueuingService, error) {
 
 	return &Beanstalk{
-		queues:   queues,
-		connPool: new(sync.Map),
+		queues:     queues,
+		clientPool: new(sync.Map),
 
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
 	}, nil
 }
 
-func MustParseInt(s string, base int, bitSize int) int32 {
+func mustParseInt(s string, base int, bitSize int) int32 {
 	i, err := strconv.ParseInt(s, base, bitSize)
 	if err != nil {
 		klog.Fatalf("Error parsing int: %v", err)
@@ -43,7 +44,7 @@ func MustParseInt(s string, base int, bitSize int) int32 {
 	return int32(i)
 }
 
-func MustParseUint(s string, base int, bitSize int) uint32 {
+func mustParseUint(s string, base int, bitSize int) uint32 {
 	i, err := strconv.ParseUint(s, base, bitSize)
 	if err != nil {
 		klog.Fatalf("Error parsing int: %v", err)
@@ -51,12 +52,17 @@ func MustParseUint(s string, base int, bitSize int) uint32 {
 	return uint32(i)
 }
 
-func (b *Beanstalk) getConnection(queueURI string) (*beanstalk.Conn, error) {
-	conn, _ := b.connPool.Load(queueURI)
-	if conn != nil {
-		return conn.(*beanstalk.Conn), nil
-	}
+type BeanstalkClientInterface interface {
+	getStats() (int32, int32, int32, error)
+	longPollReceiveMessage(longPollInterval int64) (int32, int32, error)
+}
 
+type beanstalkClient struct {
+	conn     *beanstalk.Conn
+	queueURI string
+}
+
+func NewBeanstalkClient(queueURI string) (BeanstalkClientInterface, error) {
 	var host, port string
 	parsedURI, err := url.Parse(queueURI)
 	if err != nil {
@@ -69,78 +75,77 @@ func (b *Beanstalk) getConnection(queueURI string) (*beanstalk.Conn, error) {
 		port = "11300"
 	}
 
-	conn, err = beanstalk.Dial("tcp", host+":"+port)
+	conn, err := beanstalk.Dial("tcp", host+":"+port)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("beanstalk dial error: " + err.Error())
 	}
 
-	b.connPool.Store(queueURI, conn)
-
-	return conn.(*beanstalk.Conn), nil
+	return &beanstalkClient{conn: conn, queueURI: queueURI}, nil
 }
 
-func (b *Beanstalk) getTube(queueURI string) (*beanstalk.Tube, error) {
-	conn, err := b.getConnection(queueURI)
-	if err != nil {
-		return nil, err
-	}
-
-	return &beanstalk.Tube{Conn: conn, Name: path.Base(queueURI)}, nil
-}
-
-func (b *Beanstalk) getStats(queueURI string) (int32, int32, int32, error) {
-	tube, err := b.getTube(queueURI)
-	if err != nil {
-		return 0, 0, 0, err
-	}
+func (c *beanstalkClient) getStats() (int32, int32, int32, error) {
+	tube := &beanstalk.Tube{Conn: c.conn, Name: path.Base(c.queueURI)}
 
 	output, err := tube.Stats()
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, errors.New("beanstalk get-stats error: " + err.Error())
 	}
 
-	jobsWaiting := MustParseInt(output["current-jobs-ready"], 10, 32)
-	idleWorkers := MustParseInt(output["current-waiting"], 10, 32)
-	jobsReserved := MustParseInt(output["current-jobs-reserved"], 10, 32)
+	jobsWaiting := mustParseInt(output["current-jobs-ready"], 10, 32)
+	idleWorkers := mustParseInt(output["current-waiting"], 10, 32)
+	jobsReserved := mustParseInt(output["current-jobs-reserved"], 10, 32)
 	return jobsWaiting, idleWorkers, jobsReserved, nil
 }
 
-func (b *Beanstalk) longPollReceiveMessage(queueURI string) (int32, int32, error) {
-	conn, err := b.getConnection(queueURI)
-	if err != nil {
-		return 0, 0, err
-	}
+func (c *beanstalkClient) longPollReceiveMessage(
+	longPollInterval int64) (int32, int32, error) {
 
-	tubeSet := beanstalk.NewTubeSet(conn, path.Base(queueURI))
+	tubeSet := beanstalk.NewTubeSet(c.conn, path.Base(c.queueURI))
 	id, _, err := tubeSet.Reserve(
-		time.Duration(b.longPollInterval) * time.Second,
+		time.Duration(longPollInterval) * time.Second,
 	)
 	e, ok := err.(beanstalk.ConnError)
 	if ok && e.Err == beanstalk.ErrTimeout {
 		return 0, 0, nil
 	}
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, errors.New("beanstalk tube-reserve error: " + err.Error())
 	}
 
-	statsJob, err := conn.StatsJob(id)
+	statsJob, err := c.conn.StatsJob(id)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, errors.New("beanstalk stats-job error: " + err.Error())
 	}
 
-	conn.Release(id, MustParseUint(statsJob["pri"], 10, 32), 0)
+	c.conn.Release(id, mustParseUint(statsJob["pri"], 10, 32), 0)
 
 	return 1, 0, nil
 }
 
-// TODO: need to get this data from some source
-// like: Prometheus: https://github.com/practo/beanstalkd_exporter
-func (b *Beanstalk) getAverageNumberOfMessagesSent(queueURI string) (float64, error) {
-	return 0.0, nil
+func (b *Beanstalk) getClient(
+	queueURI string) (BeanstalkClientInterface, error) {
+
+	client, _ := b.clientPool.Load(queueURI)
+	if client != nil {
+		return client.(BeanstalkClientInterface), nil
+	}
+
+	client, err := NewBeanstalkClient(queueURI)
+	if err != nil {
+		return nil, err
+	}
+	b.clientPool.Store(queueURI, client)
+
+	return client.(BeanstalkClientInterface), nil
 }
 
 func (b *Beanstalk) getApproxMessages(queueURI string) (int32, error) {
-	jobsWaiting, _, _, err := b.getStats(queueURI)
+	client, err := b.getClient(queueURI)
+	if err != nil {
+		return 0, err
+	}
+
+	jobsWaiting, _, _, err := client.getStats()
 	if err != nil {
 		return jobsWaiting, err
 	}
@@ -148,8 +153,15 @@ func (b *Beanstalk) getApproxMessages(queueURI string) (int32, error) {
 	return jobsWaiting, nil
 }
 
-func (b *Beanstalk) getApproxMessagesNotVisible(queueURI string) (int32, error) {
-	_, _, jobsReserved, err := b.getStats(queueURI)
+func (b *Beanstalk) getApproxMessagesNotVisible(
+	queueURI string) (int32, error) {
+
+	client, err := b.getClient(queueURI)
+	if err != nil {
+		return 0, err
+	}
+
+	_, _, jobsReserved, err := client.getStats()
 	if err != nil {
 		return jobsReserved, err
 	}
@@ -158,12 +170,39 @@ func (b *Beanstalk) getApproxMessagesNotVisible(queueURI string) (int32, error) 
 }
 
 func (b *Beanstalk) getIdleWorkers(queueURI string) (int32, error) {
-	_, idleWorkers, _, err := b.getStats(queueURI)
+	client, err := b.getClient(queueURI)
+	if err != nil {
+		return 0, err
+	}
+
+	_, idleWorkers, _, err := client.getStats()
 	if err != nil {
 		return idleWorkers, err
 	}
 
 	return idleWorkers, nil
+}
+
+// TODO: need to get this data from some source
+// like: Prometheus: https://github.com/practo/beanstalkd_exporter
+func (b *Beanstalk) getAverageNumberOfMessagesSent(
+	queueURI string) (float64, error) {
+
+	return 0.0, nil
+}
+
+func (b *Beanstalk) longPollReceiveMessage(
+	queueURI string) (int32, int32, error) {
+
+	client, err := b.getClient(queueURI)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	messages, idleWorkers, err := client.longPollReceiveMessage(
+		b.longPollInterval)
+
+	return messages, idleWorkers, err
 }
 
 func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
