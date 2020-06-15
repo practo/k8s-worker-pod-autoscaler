@@ -87,6 +87,10 @@ func (c *beanstalkClient) getStats() (int32, int32, int32, error) {
 	tube := &beanstalk.Tube{Conn: c.conn, Name: path.Base(c.queueURI)}
 
 	output, err := tube.Stats()
+	e, ok := err.(beanstalk.ConnError)
+	if ok && e.Err == beanstalk.ErrNotFound {
+		return 0, 0, 0, nil
+	}
 	if err != nil {
 		return 0, 0, 0, errors.New("beanstalk get-stats error: " + err.Error())
 	}
@@ -105,7 +109,7 @@ func (c *beanstalkClient) longPollReceiveMessage(
 		time.Duration(longPollInterval) * time.Second,
 	)
 	e, ok := err.(beanstalk.ConnError)
-	if ok && e.Err == beanstalk.ErrTimeout {
+	if ok && (e.Err == beanstalk.ErrTimeout) || (e.Err == beanstalk.ErrNotFound) {
 		return 0, 0, nil
 	}
 	if err != nil {
