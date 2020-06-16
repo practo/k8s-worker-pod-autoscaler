@@ -17,7 +17,8 @@ VERSION := $(shell git describe --tags --always --dirty)
 ### These variables should not need tweaking.
 ###
 
-SRC_DIRS := cmd pkg # directories which hold app source (not vendored)
+# directories which hold app source (not vendored)
+SRC_DIRS := cmd pkg/cmdutil pkg/controller pkg/queue pkg/signals pkg/version
 
 ALL_PLATFORMS := darwin/amd64 linux/amd64
 # linux/arm linux/arm64 linux/ppc64le linux/s390x

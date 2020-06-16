@@ -9,8 +9,9 @@ export GOFLAGS="-mod=vendor"
 TARGETS=$(for d in "$@"; do echo ./$d/...; done)
 
 echo "Running tests:"
-go test -installsuffix "static" ${TARGETS}
-echo
+go test -cover -installsuffix "static" ${TARGETS}
+# go test -cover -v -installsuffix "static" ./pkg/queue/...
+# exit 0
 
 echo -n "Checking gofmt: "
 ERRS=$(find "$@" -type f -name \*.go | xargs gofmt -l 2>&1 || true)

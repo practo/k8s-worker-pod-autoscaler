@@ -69,7 +69,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
-	flags.Int("beanstalk-short-poll-interval", 3, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
+	flags.Int("beanstalk-short-poll-interval", 10, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
 	flags.Int("beanstalk-long-poll-interval", 10, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
 	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
 

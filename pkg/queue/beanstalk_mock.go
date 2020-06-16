@@ -2,11 +2,16 @@
 // Source: github.com/practo/k8s-worker-pod-autoscaler/pkg/queue (interfaces: BeanstalkClientInterface)
 
 // Package queue is a generated GoMock package.
+
+// To generate the mock again, use below command: (after getting the mockgen package in vendor directory)
+// ~/go/bin/mockgen  --build_flags=--mod=vendor  -destination=./pkg/queue/beanstalk_mock.go -package=queue github.com/practo/k8s-worker-pod-autoscaler/pkg/queue BeanstalkClientInterface
+
 package queue
 
 import (
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+	time "time"
 )
 
 // MockBeanstalkClientInterface is a mock of BeanstalkClientInterface interface
@@ -63,4 +68,19 @@ func (m *MockBeanstalkClientInterface) longPollReceiveMessage(arg0 int64) (int32
 func (mr *MockBeanstalkClientInterfaceMockRecorder) longPollReceiveMessage(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "longPollReceiveMessage", reflect.TypeOf((*MockBeanstalkClientInterface)(nil).longPollReceiveMessage), arg0)
+}
+
+// put mocks base method
+func (m *MockBeanstalkClientInterface) put(arg0 []byte, arg1 uint32, arg2, arg3 time.Duration) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "put", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// put indicates an expected call of put
+func (mr *MockBeanstalkClientInterfaceMockRecorder) put(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "put", reflect.TypeOf((*MockBeanstalkClientInterface)(nil).put), arg0, arg1, arg2, arg3)
 }

@@ -8,6 +8,12 @@ import (
 	"k8s.io/klog"
 )
 
+var (
+	// doneQueueSync is a noop function to make synchronization
+	// work in unit tests
+	doneQueueSync = func() {}
+)
+
 const (
 	QueueProviderSQS              = "sqs"
 	QueueProviderBeanstalk        = "beanstalk"
@@ -93,6 +99,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 			for key, value := range queueSpecMap {
 				q.item[key] = value
 			}
+			doneQueueSync()
 		case message := <-q.updateMessageCh:
 			for key, value := range message {
 				if _, ok := q.item[key]; !ok {
@@ -102,6 +109,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.messages = value
 				q.item[key] = spec
 			}
+			doneQueueSync()
 		case messageSent := <-q.updateMessageSentCh:
 			for key, value := range messageSent {
 				if _, ok := q.item[key]; !ok {
@@ -111,6 +119,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.messagesSentPerMinute = value
 				q.item[key] = spec
 			}
+			doneQueueSync()
 		case idleStatus := <-q.idleWorkerCh:
 			for key, value := range idleStatus {
 				if _, ok := q.item[key]; !ok {
@@ -120,11 +129,13 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.idleWorkers = value
 				q.item[key] = spec
 			}
+			doneQueueSync()
 		case key := <-q.deleteCh:
 			_, ok := q.item[key]
 			if ok {
 				delete(q.item, key)
 			}
+			doneQueueSync()
 		case listResultCh := <-q.listCh:
 			listResultCh <- DeepCopyItem(q.item)
 		case <-stopCh:

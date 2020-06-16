@@ -53,6 +53,7 @@ func mustParseUint(s string, base int, bitSize int) uint32 {
 }
 
 type BeanstalkClientInterface interface {
+	put(body []byte, pri uint32, delay, t time.Duration) (id uint64, err error)
 	getStats() (int32, int32, int32, error)
 	longPollReceiveMessage(longPollInterval int64) (int32, int32, error)
 }
@@ -99,6 +100,14 @@ func (c *beanstalkClient) getStats() (int32, int32, int32, error) {
 	idleWorkers := mustParseInt(output["current-waiting"], 10, 32)
 	jobsReserved := mustParseInt(output["current-jobs-reserved"], 10, 32)
 	return jobsWaiting, idleWorkers, jobsReserved, nil
+}
+
+func (c *beanstalkClient) put(
+	body []byte, pri uint32, delay, t time.Duration) (uint64, error) {
+
+	tube := &beanstalk.Tube{Conn: c.conn, Name: path.Base(c.queueURI)}
+	id, err := tube.Put(body, pri, delay, t)
+	return id, err
 }
 
 func (c *beanstalkClient) longPollReceiveMessage(
@@ -210,13 +219,10 @@ func (b *Beanstalk) longPollReceiveMessage(
 }
 
 func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
-	for {
-		select {
-		case <-stopCh:
-			klog.Info("Stopping beanstalk syncer gracefully.")
-			return
-		}
-	}
+	// Sync is only required when cache is implemented
+	// keeping the noop function to keep the impl same as
+	// other queue providers
+	return
 }
 
 func (b *Beanstalk) waitForShortPollInterval() {
@@ -224,9 +230,7 @@ func (b *Beanstalk) waitForShortPollInterval() {
 }
 
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
-	if queueSpec.workers == 0 && queueSpec.messages == 0 && queueSpec.messagesSentPerMinute == 0 {
-		b.queues.updateIdleWorkers(key, -1)
-
+	if queueSpec.workers == 0 && queueSpec.messages == 0 {
 		// If there are no workers running we do a long poll to find a job(s)
 		// in the queue. On finding job(s) we increment the queue message
 		// by no of messages received to trigger scale up.
@@ -277,7 +281,8 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
 	// do not scale down as those messages are still being processed (and we dont know which worker)
-	approxMessagesNotVisible, err := b.getApproxMessagesNotVisible(queueSpec.uri)
+	approxMessagesNotVisible, err := b.getApproxMessagesNotVisible(
+		queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to get approximate messages not visible in queue %q, %v.",
 			queueSpec.name, err)
