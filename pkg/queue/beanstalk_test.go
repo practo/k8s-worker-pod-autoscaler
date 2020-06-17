@@ -386,6 +386,7 @@ func TestBeanstalkClient(t *testing.T) {
 		return
 	}
 
+	// test1: test when nothing is there what happens
 	jobsWaiting, idleWorkers, jobsReserved, err := beastalkClient.getStats()
 	if err != nil {
 		klog.Fatalf("Error getting stats(1): %v\n", err)
@@ -397,28 +398,43 @@ func TestBeanstalkClient(t *testing.T) {
 			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
 	}
 
+	// test2: add a job in the queue
 	beastalkClient.put([]byte("51620"), 1, 0, time.Minute)
 	jobsWaiting, idleWorkers, jobsReserved, err = beastalkClient.getStats()
 	if err != nil {
 		klog.Fatalf("Error getting stats(2): %v\n", err)
 	}
 	if jobsWaiting != 1 || idleWorkers != 0 || jobsReserved != 0 {
-		t.Errorf("expected jobsWaiting=0,"+
+		t.Errorf("expected jobsWaiting=1,"+
 			"idleWorkers=0,"+
 			"jobsReserved=0,"+
 			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
 	}
 
+	// test3: add another job in the queue
 	beastalkClient.put([]byte("51621"), 1, 0, time.Minute)
 	jobsWaiting, idleWorkers, jobsReserved, err = beastalkClient.getStats()
 	if err != nil {
-		klog.Fatalf("Error getting stats(2): %v\n", err)
+		klog.Fatalf("Error getting stats(3): %v\n", err)
 	}
 	if jobsWaiting != 2 || idleWorkers != 0 || jobsReserved != 0 {
-		t.Errorf("expected jobsWaiting=0,"+
+		t.Errorf("expected jobsWaiting=2,"+
 			"idleWorkers=0,"+
 			"jobsReserved=0,"+
 			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
+	}
+
+	// test4: consume 1 job from the queue using long poll and put the job back
+	jobsWaiting, idleWorkers, err = beastalkClient.longPollReceiveMessage(
+		int64(10),
+	)
+	if err != nil {
+		klog.Fatalf("Error getting stats(4): %v\n", err)
+	}
+	if jobsWaiting != 1 || idleWorkers != 0 {
+		t.Errorf("expected jobsWaiting=1,"+
+			"idleWorkers=0,"+
+			"got=(%v, %v) resp.\n", jobsWaiting, idleWorkers)
 	}
 
 	killCh <- true
