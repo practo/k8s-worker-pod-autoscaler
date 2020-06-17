@@ -9,7 +9,7 @@ export GOFLAGS="-mod=vendor"
 TARGETS=$(for d in "$@"; do echo ./$d/...; done)
 
 echo "Running tests:"
-go test -cover -installsuffix "static" ${TARGETS}
+go test -v -cover -installsuffix "static" ${TARGETS}
 # go test -cover -v -installsuffix "static" ./pkg/queue/...
 # exit 0
 

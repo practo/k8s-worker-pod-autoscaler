@@ -33,6 +33,7 @@ IMAGE := $(REGISTRY)/$(BIN)
 TAG := $(VERSION)
 
 BUILD_IMAGE ?= golang:1.14.2-alpine
+TEST_IMAGE ?= practodev/golang:1.14.2-alpine-test
 
 # If you want to build all binaries, see the 'all-build' rule.
 # If you want to build all containers, see the 'all-container' rule.
@@ -177,7 +178,7 @@ test: $(BUILD_DIRS)
 	    -v $$(pwd)/.go/cache:/.cache                            \
 	    --env HTTP_PROXY=$(HTTP_PROXY)                          \
 	    --env HTTPS_PROXY=$(HTTPS_PROXY)                        \
-	    $(BUILD_IMAGE)                                          \
+	    $(TEST_IMAGE)                                          \
 	    /bin/sh -c "                                            \
 	        ARCH=$(ARCH)                                        \
 	        OS=$(OS)                                            \

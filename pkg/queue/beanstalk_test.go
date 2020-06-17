@@ -2,12 +2,12 @@ package queue
 
 import (
 	"k8s.io/klog"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	// _ "github.com/golang/mock/mockgen"
-	"github.com/beanstalkd/go-beanstalk"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/signals"
 )
 
@@ -16,7 +16,7 @@ var (
 )
 
 const (
-	localBeanstalkHost = "host.docker.internal"
+	localBeanstalkHost = "localhost"
 )
 
 func init() {
@@ -337,18 +337,54 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 	}
 }
 
-func TestBeanstalkClientGetStats(t *testing.T) {
+func runBeanstalkdProcess(
+	startCh chan bool, killCh chan bool, doneCh chan bool) {
+
+	cmd := exec.Command("beanstalkd", "-l", "localhost", "-p", "11300")
+	if err := cmd.Start(); err != nil {
+		klog.Errorf("Error starting the beanstald process: %v\n", err)
+		return
+	}
+	klog.Info("Started local beanstalkd process")
+	startCh <- true
+	for {
+		switch {
+		case <-killCh:
+			klog.Info("Killing beanstalkd process")
+			if err := cmd.Process.Kill(); err != nil {
+				klog.Errorf("Error killing the beanstalkd process: %v\n", err)
+				return
+			}
+			klog.Info("Killed beanstalkd.")
+			doneCh <- true
+			return
+		}
+	}
+}
+
+func TestBeanstalkClient(t *testing.T) {
+	startCh := make(chan bool)
+	killCh := make(chan bool)
+	doneCh := make(chan bool)
+	go runBeanstalkdProcess(startCh, killCh, doneCh)
+	<-startCh
+
 	queueName := "otpsender"
 	queueURI := getQueueURI("", queueName)
-	beastalkClient, err := NewBeanstalkClient(queueURI)
-	e, ok := err.(beanstalk.ConnError)
-	if ok && e.Err != beanstalk.ErrNotFound {
-		t.Skipf("Skipping, connection %v:11300 failed", localBeanstalkHost)
-	}
 
-	klog.Info("Note: Testing locally require beanstalkd restart " +
-		" in every `make test` invocation. Tests fail if this is not done." +
-		" MAC Users: `brew services restart beanstalkd && make test`")
+	beastalkClient, err := NewBeanstalkClient(queueURI)
+	for connect := 0; err != nil && connect < 3; connect++ {
+		beastalkClient, err = NewBeanstalkClient(queueURI)
+		if err != nil {
+			klog.Warningf("Retrying connection to local beanstalk")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+	}
+	if err != nil {
+		t.Errorf("Failed to connect to %v:11300", localBeanstalkHost)
+		return
+	}
 
 	jobsWaiting, idleWorkers, jobsReserved, err := beastalkClient.getStats()
 	if err != nil {
@@ -384,4 +420,8 @@ func TestBeanstalkClientGetStats(t *testing.T) {
 			"jobsReserved=0,"+
 			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
 	}
+
+	killCh <- true
+	<-doneCh
+	klog.Info("Beanstalkd process gracefully shutdown, ending test.")
 }
