@@ -71,7 +71,7 @@ spec:
 ```
 Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tube`
 
-### Flags documentation:
+### WPA Spec documentation:
 - **minReplicas**: minimum number of workers you want to run. (mandatory)
 - **maxReplicas**: maximum number of workers you want to run. (mandatory)
 - **deploymentName**: name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
@@ -100,8 +100,8 @@ Examples:
 
 Flags:
       --aws-regions string                  comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
-      --beanstalk-long-poll-interval int    the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive (default 10)
-      --beanstalk-short-poll-interval int   the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length (default 3)
+      --beanstalk-long-poll-interval int    the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive (default 20)
+      --beanstalk-short-poll-interval int   the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length (default 20)
   -h, --help                                help for run
       --k8s-api-burst int                   maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
       --k8s-api-qps float                   qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
