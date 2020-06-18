@@ -71,7 +71,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
 	flags.Int("beanstalk-short-poll-interval", 20, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
 	flags.Int("beanstalk-long-poll-interval", 20, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
-	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
+	flags.String("queue-services", "sqs", "comma separated queue services, the WPA will start with")
 
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
 	flags.Float64("k8s-api-qps", 5.0, "qps indicates the maximum QPS to the k8s api from the clients(wpa).")
