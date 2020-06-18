@@ -2,6 +2,7 @@ package queue
 
 import (
 	"errors"
+	"io"
 	"net/url"
 	"path"
 	"strconv"
@@ -63,11 +64,11 @@ type beanstalkClient struct {
 	queueURI string
 }
 
-func NewBeanstalkClient(queueURI string) (BeanstalkClientInterface, error) {
+func parseBeanstalkQueueURI(queueURI string) (string, string, error) {
 	var host, port string
 	parsedURI, err := url.Parse(queueURI)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	if host = parsedURI.Hostname(); host == "" {
 		host = "localhost"
@@ -75,59 +76,156 @@ func NewBeanstalkClient(queueURI string) (BeanstalkClientInterface, error) {
 	if port = parsedURI.Port(); port == "" {
 		port = "11300"
 	}
+	return host, port, nil
+}
+
+func getBeanstalkConn(queueURI string) (*beanstalk.Conn, error) {
+	host, port, err := parseBeanstalkQueueURI(queueURI)
+	if err != nil {
+		return nil, err
+	}
 
 	conn, err := beanstalk.Dial("tcp", host+":"+port)
 	if err != nil {
-		return nil, errors.New("beanstalk dial error: " + err.Error())
+		return nil, errors.New("dial-error: " + err.Error())
+	}
+	return conn, nil
+}
+
+func NewBeanstalkClient(queueURI string) (BeanstalkClientInterface, error) {
+	conn, err := getBeanstalkConn(queueURI)
+	if err != nil {
+		return nil, err
 	}
 
 	return &beanstalkClient{conn: conn, queueURI: queueURI}, nil
 }
 
-func (c *beanstalkClient) getStats() (int32, int32, int32, error) {
-	tube := &beanstalk.Tube{Conn: c.conn, Name: path.Base(c.queueURI)}
+func (c *beanstalkClient) reestablishConn() error {
+	klog.Infof("Re-establishing connection for %s\n", c.queueURI)
+	newConn, err := getBeanstalkConn(c.queueURI)
+	c.conn = newConn
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
+func (c *beanstalkClient) getTube() *beanstalk.Tube {
+	return &beanstalk.Tube{Conn: c.conn, Name: path.Base(c.queueURI)}
+}
+
+func (c *beanstalkClient) executeGetStats() (int32, int32, int32, error) {
+	tube := c.getTube()
 	output, err := tube.Stats()
+	if err == nil {
+		jobsWaiting := mustParseInt(output["current-jobs-ready"], 10, 32)
+		idleWorkers := mustParseInt(output["current-waiting"], 10, 32)
+		jobsReserved := mustParseInt(output["current-jobs-reserved"], 10, 32)
+		return jobsWaiting, idleWorkers, jobsReserved, nil
+	}
+
 	e, ok := err.(beanstalk.ConnError)
-	if ok && e.Err == beanstalk.ErrNotFound {
+	if !ok {
+		return 0, 0, 0, err
+	}
+
+	if e.Err == beanstalk.ErrNotFound {
 		return 0, 0, 0, nil
 	}
-	if err != nil {
-		return 0, 0, 0, errors.New("beanstalk get-stats error: " + err.Error())
+
+	return 0, 0, 0, e.Unwrap()
+}
+
+func (c *beanstalkClient) getStats() (int32, int32, int32, error) {
+	jobsWaiting, idleWorkers, jobsReserved, err := c.executeGetStats()
+	if err == nil {
+		return jobsWaiting, idleWorkers, jobsReserved, nil
 	}
 
-	jobsWaiting := mustParseInt(output["current-jobs-ready"], 10, 32)
-	idleWorkers := mustParseInt(output["current-waiting"], 10, 32)
-	jobsReserved := mustParseInt(output["current-jobs-reserved"], 10, 32)
+	if err == io.EOF {
+		if c.reestablishConn() == nil {
+			jobsWaiting, idleWorkers, jobsReserved, err = c.executeGetStats()
+		}
+	}
+
+	if err != nil {
+		return 0, 0, 0, errors.New("get-stats error: " + err.Error())
+	}
+
 	return jobsWaiting, idleWorkers, jobsReserved, nil
+}
+
+func (c *beanstalkClient) putJob(
+	body []byte, pri uint32, delay, t time.Duration) (uint64, error) {
+
+	tube := c.getTube()
+	id, err := tube.Put(body, pri, delay, t)
+	if err == nil {
+		return id, nil
+	}
+
+	e, ok := err.(beanstalk.ConnError)
+	if ok {
+		return id, e.Unwrap()
+	}
+	return id, err
 }
 
 func (c *beanstalkClient) put(
 	body []byte, pri uint32, delay, t time.Duration) (uint64, error) {
 
-	tube := &beanstalk.Tube{Conn: c.conn, Name: path.Base(c.queueURI)}
-	id, err := tube.Put(body, pri, delay, t)
+	id, err := c.putJob(body, pri, delay, t)
+	if err == io.EOF {
+		if c.reestablishConn() == nil {
+			id, err = c.putJob(body, pri, delay, t)
+		}
+	}
 	return id, err
+}
+
+func (c *beanstalkClient) doLongPoll(
+	longPollInterval int64) (bool, uint64, error) {
+
+	tubeSet := beanstalk.NewTubeSet(c.conn, path.Base(c.queueURI))
+	id, _, err := tubeSet.Reserve(
+		time.Duration(longPollInterval) * time.Second)
+	if err == nil {
+		return true, id, nil
+	}
+
+	e, ok := err.(beanstalk.ConnError)
+	if ok && (e.Err == beanstalk.ErrTimeout) || (e.Err == beanstalk.ErrNotFound) {
+
+		return false, id, nil
+	}
+
+	if ok {
+		return true, id, e.Unwrap()
+	}
+	return true, id, err
 }
 
 func (c *beanstalkClient) longPollReceiveMessage(
 	longPollInterval int64) (int32, int32, error) {
 
-	tubeSet := beanstalk.NewTubeSet(c.conn, path.Base(c.queueURI))
-	id, _, err := tubeSet.Reserve(
-		time.Duration(longPollInterval) * time.Second,
-	)
-	e, ok := err.(beanstalk.ConnError)
-	if ok && (e.Err == beanstalk.ErrTimeout) || (e.Err == beanstalk.ErrNotFound) {
+	tryReserve, id, err := c.doLongPoll(longPollInterval)
+	if err == io.EOF {
+		if c.reestablishConn() == nil {
+			tryReserve, id, err = c.doLongPoll(longPollInterval)
+		}
+	}
+	if !tryReserve {
 		return 0, 0, nil
 	}
+
 	if err != nil {
-		return 0, 0, errors.New("beanstalk tube-reserve error: " + err.Error())
+		return 0, 0, errors.New("long-poll error: " + err.Error())
 	}
 
 	statsJob, err := c.conn.StatsJob(id)
 	if err != nil {
-		return 0, 0, errors.New("beanstalk stats-job error: " + err.Error())
+		return 0, 0, errors.New("stats-job error: " + err.Error())
 	}
 
 	c.conn.Release(id, mustParseUint(statsJob["pri"], 10, 32), 0)

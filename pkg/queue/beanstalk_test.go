@@ -101,7 +101,7 @@ func TestPollSyncWhenNoMessagesInQueue(t *testing.T) {
 	// TODO: due to this call not able to use poller as an interface
 	poller.clientPool.Store(queueURI, mockBeanstalkClient)
 
-	klog.Info("Running poll and sync")
+	klog.Info("Running poll and sync.")
 	poller.poll(key, queues.item[key])
 	<-doneChan
 	<-doneChan
@@ -170,7 +170,7 @@ func TestPollSyncWhenMessagesInQueue(t *testing.T) {
 	// TODO: due to this call not able to use poller as an interface
 	poller.clientPool.Store(queueURI, mockBeanstalkClient)
 
-	klog.Info("Running poll and sync")
+	klog.Info("Running poll and sync.")
 	poller.poll(key, queues.item[key])
 	<-doneChan
 	<-doneChan
@@ -240,7 +240,7 @@ func TestPollSyncWhenNoMessagesInQueueButMessagesAreInFlight(t *testing.T) {
 	// TODO: due to this call not able to use poller as an interface
 	poller.clientPool.Store(queueURI, mockBeanstalkClient)
 
-	klog.Info("Running poll and sync")
+	klog.Info("Running poll and sync.")
 	poller.poll(key, queues.item[key])
 	<-doneChan
 
@@ -310,7 +310,7 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 	// TODO: due to this call not able to use poller as an interface
 	poller.clientPool.Store(queueURI, mockBeanstalkClient)
 
-	klog.Info("Running poll and sync")
+	klog.Info("Running poll and sync.")
 	poller.poll(key, queues.item[key])
 	<-doneChan
 	<-doneChan
@@ -345,12 +345,12 @@ func runBeanstalkdProcess(
 		klog.Errorf("Error starting the beanstald process: %v\n", err)
 		return
 	}
-	klog.Info("Started local beanstalkd process")
+	klog.Info("Started local beanstalkd process.")
 	startCh <- true
 	for {
 		switch {
 		case <-killCh:
-			klog.Info("Killing beanstalkd process")
+			klog.Info("Killing beanstalkd process.")
 			if err := cmd.Process.Kill(); err != nil {
 				klog.Errorf("Error killing the beanstalkd process: %v\n", err)
 				return
@@ -360,6 +360,20 @@ func runBeanstalkdProcess(
 			return
 		}
 	}
+}
+
+func GetBeanstalkClient(queueURI string) (BeanstalkClientInterface, error) {
+	beastalkClient, err := NewBeanstalkClient(queueURI)
+	for connect := 0; err != nil && connect < 3; connect++ {
+		beastalkClient, err = NewBeanstalkClient(queueURI)
+		if err == nil {
+			return beastalkClient, nil
+		}
+		klog.Warningf("Retrying connection to local beanstalk")
+		time.Sleep(1 * time.Second)
+		continue
+	}
+	return beastalkClient, err
 }
 
 func TestBeanstalkClient(t *testing.T) {
@@ -372,15 +386,7 @@ func TestBeanstalkClient(t *testing.T) {
 	queueName := "otpsender"
 	queueURI := getQueueURI("", queueName)
 
-	beastalkClient, err := NewBeanstalkClient(queueURI)
-	for connect := 0; err != nil && connect < 3; connect++ {
-		beastalkClient, err = NewBeanstalkClient(queueURI)
-		if err != nil {
-			klog.Warningf("Retrying connection to local beanstalk")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-	}
+	beastalkClient, err := GetBeanstalkClient(queueURI)
 	if err != nil {
 		t.Errorf("Failed to connect to %v:11300", localBeanstalkHost)
 		return
@@ -412,7 +418,11 @@ func TestBeanstalkClient(t *testing.T) {
 	}
 
 	// test3: add another job in the queue
-	beastalkClient.put([]byte("51621"), 1, 0, time.Minute)
+	_, err = beastalkClient.put([]byte("51621"), 1, 0, time.Minute)
+	if err != nil {
+		t.Errorf("expected jobs put to work, error happened: %v\n", err)
+		return
+	}
 	jobsWaiting, idleWorkers, jobsReserved, err = beastalkClient.getStats()
 	if err != nil {
 		klog.Fatalf("Error getting stats(3): %v\n", err)
@@ -423,6 +433,10 @@ func TestBeanstalkClient(t *testing.T) {
 			"jobsReserved=0,"+
 			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
 	}
+
+	klog.Info("Sleeping for 30 seconds, please restart")
+	time.Sleep(30 * time.Second)
+	klog.Info("running long poll")
 
 	// test4: consume 1 job from the queue using long poll and put the job back
 	jobsWaiting, idleWorkers, err = beastalkClient.longPollReceiveMessage(
@@ -439,5 +453,83 @@ func TestBeanstalkClient(t *testing.T) {
 
 	killCh <- true
 	<-doneCh
-	klog.Info("Beanstalkd process gracefully shutdown, ending test.")
+	klog.Info("Beanstalkd process gracefully shutdown.")
+
+	// test5: testing if restarting beanstalkd, re-establishes the conn
+	// in mutliple scenarios
+
+	// test 5a
+	go runBeanstalkdProcess(startCh, killCh, doneCh)
+	<-startCh
+	_, err = GetBeanstalkClient(queueURI)
+	if err != nil {
+		t.Errorf("Failed to connect to %v:11300", localBeanstalkHost)
+		return
+	}
+	klog.Info("5a> Beanstalkd running again, checking re-establishment")
+	jobsWaiting, idleWorkers, err = beastalkClient.longPollReceiveMessage(
+		int64(10),
+	)
+	if err != nil {
+		klog.Fatalf("Error doing longPoll(5a): %v\n", err)
+	}
+	if jobsWaiting != 0 || idleWorkers != 0 {
+		t.Errorf("expected jobsWaiting=0,"+
+			"idleWorkers=0,"+
+			"got=(%v, %v) resp.\n", jobsWaiting, idleWorkers)
+	}
+	killCh <- true
+	<-doneCh
+	klog.Info("5a> Beanstalkd process gracefully shutdown.")
+
+	// test 5b
+	go runBeanstalkdProcess(startCh, killCh, doneCh)
+	<-startCh
+	_, err = GetBeanstalkClient(queueURI)
+	if err != nil {
+		t.Errorf("Failed to connect to %v:11300", localBeanstalkHost)
+		return
+	}
+	klog.Info("5b> Beanstalkd running again, checking re-establishment")
+	_, err = beastalkClient.put([]byte("51621"), 1, 0, time.Minute)
+	if err != nil {
+		t.Errorf("expected jobs put to work, error happened: %v\n", err)
+		return
+	}
+	jobsWaiting, idleWorkers, jobsReserved, err = beastalkClient.getStats()
+	if err != nil {
+		klog.Fatalf("Error getting stats(1): %v\n", err)
+	}
+	if jobsWaiting != 1 || idleWorkers != 0 || jobsReserved != 0 {
+		t.Errorf("expected jobsWaiting=0,"+
+			"idleWorkers=0,"+
+			"jobsReserved=0,"+
+			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
+	}
+	killCh <- true
+	<-doneCh
+	klog.Info("5b> Beanstalkd process gracefully shutdown.")
+
+	// test 5c
+	go runBeanstalkdProcess(startCh, killCh, doneCh)
+	<-startCh
+	_, err = GetBeanstalkClient(queueURI)
+	if err != nil {
+		t.Errorf("Failed to connect to %v:11300", localBeanstalkHost)
+		return
+	}
+	klog.Info("5c> Beanstalkd running again, checking re-establishment")
+	jobsWaiting, idleWorkers, jobsReserved, err = beastalkClient.getStats()
+	if err != nil {
+		klog.Fatalf("Error getting stats(1): %v\n", err)
+	}
+	if jobsWaiting != 0 || idleWorkers != 0 || jobsReserved != 0 {
+		t.Errorf("expected jobsWaiting=0,"+
+			"idleWorkers=0,"+
+			"jobsReserved=0,"+
+			"got=(%v, %v, %v) resp.\n", jobsWaiting, idleWorkers, jobsReserved)
+	}
+	killCh <- true
+	<-doneCh
+	klog.Info("5c> Beanstalkd process gracefully shutdown.")
 }
