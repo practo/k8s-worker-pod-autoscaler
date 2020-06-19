@@ -16,6 +16,7 @@ import (
 // Beanstalk is used to by the Poller to get the queue
 // information from Beanstalk, it implements the QueuingService interface
 type Beanstalk struct {
+	name       string
 	queues     *Queues
 	clientPool *sync.Map
 
@@ -24,11 +25,13 @@ type Beanstalk struct {
 }
 
 func NewBeanstalk(
+	name string,
 	queues *Queues,
 	shortPollInterval int,
 	longPollInterval int) (QueuingService, error) {
 
 	return &Beanstalk{
+		name:       name,
 		queues:     queues,
 		clientPool: new(sync.Map),
 
@@ -316,15 +319,19 @@ func (b *Beanstalk) longPollReceiveMessage(
 	return messages, idleWorkers, err
 }
 
+func (b *Beanstalk) waitForShortPollInterval() {
+	time.Sleep(b.shortPollInterval)
+}
+
+func (b *Beanstalk) GetName() string {
+	return b.name
+}
+
 func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
 	// Sync is only required when cache is implemented
 	// keeping the noop function to keep the impl same as
 	// other queue providers
 	return
-}
-
-func (b *Beanstalk) waitForShortPollInterval() {
-	time.Sleep(b.shortPollInterval)
 }
 
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {

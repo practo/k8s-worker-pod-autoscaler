@@ -10,16 +10,16 @@ import (
 // the configured message queuing service provider
 type Poller struct {
 	queues         *Queues
-	service        QueuingService
+	queueService   QueuingService
 	threads        map[string]bool
 	listThreadCh   chan chan map[string]bool
 	updateThreadCh chan map[string]bool
 }
 
-func NewPoller(queues *Queues, service QueuingService) *Poller {
+func NewPoller(queues *Queues, queueService QueuingService) *Poller {
 	return &Poller{
 		queues:         queues,
-		service:        service,
+		queueService:   queueService,
 		threads:        make(map[string]bool),
 		listThreadCh:   make(chan chan map[string]bool),
 		updateThreadCh: make(chan map[string]bool),
@@ -43,7 +43,7 @@ func (p *Poller) runPollThread(key string) {
 		if queueSpec.name == "" {
 			return
 		}
-		p.service.poll(key, queueSpec)
+		p.queueService.poll(key, queueSpec)
 	}
 }
 
@@ -80,10 +80,11 @@ func (p *Poller) Sync(stopCh <-chan struct{}) {
 
 func (p *Poller) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(time.Second * 1)
+	queueServiceName := p.queueService.GetName()
 	for {
 		select {
 		case <-ticker.C:
-			queues := p.queues.List()
+			queues := p.queues.List(queueServiceName)
 			// Create a new thread
 			for key, _ := range queues {
 				threads := p.listThreads()

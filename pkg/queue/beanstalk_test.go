@@ -50,7 +50,7 @@ func buildQueues(
 		<-doneChan
 	}
 
-	poller, err := NewBeanstalk(queues, 1, 1)
+	poller, err := NewBeanstalk(BeanstalkQueueService, queues, 1, 1)
 	if err != nil {
 		return nil, nil, err
 	}
