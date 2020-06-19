@@ -2,15 +2,18 @@ package queue
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
 
 	"k8s.io/klog"
 )
 
+var (
+	// doneQueueSync is a noop function to make synchronization
+	// work in unit tests
+	doneQueueSync = func() {}
+)
+
 const (
-	QueueProviderSQS              = "sqs"
-	QueueProviderBeanstalk        = "beanstalk"
 	BenanstalkProtocol            = "beanstalk"
 	UnsyncedQueueMessageCount     = -1
 	UnsyncedMessagesSentPerMinute = -1
@@ -31,12 +34,12 @@ type Queues struct {
 
 // QueueSpec is the specification for a single queue
 type QueueSpec struct {
-	name      string
-	namespace string
-	uri       string
-	host      string
-	protocol  string
-	provider  string
+	name             string
+	namespace        string
+	uri              string
+	host             string
+	protocol         string
+	queueServiceName string
 	// messages is the number of messages in the queue which have not
 	// been picked up for processing by the worker
 	// SQS: ApproximateNumberOfMessagesVisible metric
@@ -52,7 +55,8 @@ type QueueSpec struct {
 	idleWorkers int32
 	workers     int32
 
-	// secondsToProcessOneJob tells the time to process one job by one worker process
+	// secondsToProcessOneJob tells the time to process
+	// one job by one worker process
 	secondsToProcessOneJob float64
 }
 
@@ -93,6 +97,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 			for key, value := range queueSpecMap {
 				q.item[key] = value
 			}
+			doneQueueSync()
 		case message := <-q.updateMessageCh:
 			for key, value := range message {
 				if _, ok := q.item[key]; !ok {
@@ -102,6 +107,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.messages = value
 				q.item[key] = spec
 			}
+			doneQueueSync()
 		case messageSent := <-q.updateMessageSentCh:
 			for key, value := range messageSent {
 				if _, ok := q.item[key]; !ok {
@@ -111,6 +117,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.messagesSentPerMinute = value
 				q.item[key] = spec
 			}
+			doneQueueSync()
 		case idleStatus := <-q.idleWorkerCh:
 			for key, value := range idleStatus {
 				if _, ok := q.item[key]; !ok {
@@ -120,11 +127,13 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 				spec.idleWorkers = value
 				q.item[key] = spec
 			}
+			doneQueueSync()
 		case key := <-q.deleteCh:
 			_, ok := q.item[key]
 			if ok {
 				delete(q.item, key)
 			}
+			doneQueueSync()
 		case listResultCh := <-q.listCh:
 			listResultCh <- DeepCopyItem(q.item)
 		case <-stopCh:
@@ -134,9 +143,12 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 	}
 }
 
-func (q *Queues) Add(namespace string, name string, uri string, workers int32, secondsToProcessOneJob float64) error {
+func (q *Queues) Add(namespace string, name string, uri string,
+	workers int32, secondsToProcessOneJob float64) error {
+
 	if uri == "" {
-		klog.Warningf("Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
+		klog.Warningf(
+			"Queue is empty(or not synced) ignoring the wpa for uri: %s", uri)
 		return nil
 	}
 
@@ -147,9 +159,10 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32, s
 		return err
 	}
 
-	found, provider, err := getProvider(host, protocol)
-	if !found {
-		klog.Warningf("Unsupported queue provider: %s, ignoring wpa: %s", provider, name)
+	supported, queueServiceName, err := getQueueServiceName(host, protocol)
+	if !supported {
+		klog.Warningf(
+			"Unsupported: %s, skipping wpa: %s", queueServiceName, name)
 		return nil
 	}
 
@@ -169,7 +182,7 @@ func (q *Queues) Add(namespace string, name string, uri string, workers int32, s
 		uri:                    uri,
 		protocol:               protocol,
 		host:                   host,
-		provider:               provider,
+		queueServiceName:       queueServiceName,
 		messages:               messages,
 		messagesSentPerMinute:  messagesSent,
 		workers:                workers,
@@ -186,14 +199,24 @@ func (q *Queues) Delete(namespace string, name string) error {
 	return nil
 }
 
-func (q *Queues) List() map[string]QueueSpec {
+func (q *Queues) ListAll() map[string]QueueSpec {
 	listResultCh := make(chan map[string]QueueSpec)
 	q.listCh <- listResultCh
 	return <-listResultCh
 }
 
+func (q *Queues) List(queueServiceName string) map[string]QueueSpec {
+	filteredQueues := make(map[string]QueueSpec)
+	for key, spec := range q.ListAll() {
+		if spec.queueServiceName == queueServiceName {
+			filteredQueues[key] = spec
+		}
+	}
+	return filteredQueues
+}
+
 func (q *Queues) ListQueue(key string) QueueSpec {
-	item := q.List()
+	item := q.ListAll()
 	if _, ok := item[key]; !ok {
 		return QueueSpec{}
 	}
@@ -205,13 +228,16 @@ func (q *Queues) listQueueByNamespace(namespace string, name string) QueueSpec {
 	return q.ListQueue(getKey(namespace, name))
 }
 
-func (q *Queues) GetQueueInfo(namespace string, name string) (string, int32, float64, int32) {
+func (q *Queues) GetQueueInfo(
+	namespace string, name string) (string, int32, float64, int32) {
+
 	spec := q.listQueueByNamespace(namespace, name)
 	if spec.name == "" {
 		return "", 0, 0.0, 0
 	}
 
-	return spec.name, spec.messages, spec.messagesSentPerMinute, spec.idleWorkers
+	return spec.name, spec.messages,
+		spec.messagesSentPerMinute, spec.idleWorkers
 }
 
 func parseQueueURI(uri string) (string, string, error) {
@@ -221,25 +247,6 @@ func parseQueueURI(uri string) (string, string, error) {
 	}
 
 	return parsedURI.Scheme, parsedURI.Host, nil
-}
-
-// getProvider returns the provider name
-// TODO: add validation for the queue provider in the wpa custom resource
-func getProvider(host string, protocol string) (bool, string, error) {
-	matched, err := regexp.MatchString("^sqs.[a-z][a-z]-[a-z]*-[0-9]{1}.amazonaws.com", host)
-	if err != nil {
-		return false, "", nil
-	}
-
-	if matched {
-		return true, QueueProviderSQS, nil
-	}
-
-	if protocol == BenanstalkProtocol {
-		return true, QueueProviderBeanstalk, nil
-	}
-
-	return false, "", nil
 }
 
 func getQueueName(name string) string {

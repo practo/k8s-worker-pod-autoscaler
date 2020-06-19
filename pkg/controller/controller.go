@@ -534,8 +534,8 @@ func (c *Controller) getDesiredWorkers(
 	}
 
 	// Attempt for massive scale down
-	if idleWorkers > 0 {
-		desiredWorkers := currentWorkers - idleWorkers
+	if currentWorkers == idleWorkers {
+		desiredWorkers := int32(0)
 		// for massive scale down to happen maxDisruptableWorkers
 		// should be ignored
 		return convertDesiredReplicasWithRules(

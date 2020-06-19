@@ -4,6 +4,8 @@ go 1.14
 
 require (
 	github.com/aws/aws-sdk-go v1.29.15
+	github.com/beanstalkd/go-beanstalk v0.0.0-20200526060843-1cc502ecaf3c
+	github.com/golang/mock v1.4.3
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/prometheus/client_golang v0.9.3
 	github.com/spf13/cobra v0.0.5

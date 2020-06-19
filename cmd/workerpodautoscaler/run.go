@@ -54,6 +54,9 @@ func (v *runCmd) new() *cobra.Command {
 		"kube-config",
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
+		"beanstalk-short-poll-interval",
+		"beanstalk-long-poll-interval",
+		"queue-services",
 		"metrics-port",
 		"k8s-api-qps",
 		"k8s-api-burst",
@@ -66,10 +69,13 @@ func (v *runCmd) new() *cobra.Command {
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
+	flags.Int("beanstalk-short-poll-interval", 20, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
+	flags.Int("beanstalk-long-poll-interval", 20, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
+	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
+
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
 	flags.Float64("k8s-api-qps", 5.0, "qps indicates the maximum QPS to the k8s api from the clients(wpa).")
 	flags.Int("k8s-api-burst", 10, "maximum burst for throttle between requests from clients(wpa) to k8s api")
-
 	for _, flagName := range flagNames {
 		if err := v.BindFlag(flagName); err != nil {
 			fmt.Println(err)
@@ -90,13 +96,18 @@ func parseRegions(regionNames string) []string {
 }
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
-	resyncPeriod := time.Second * time.Duration(v.Viper.GetInt("resync-period"))
+	resyncPeriod := time.Second * time.Duration(
+		v.Viper.GetInt("resync-period"))
 	wpaThraeds := v.Viper.GetInt("wpa-threads")
 	wpaDefaultMaxDisruption := v.Viper.GetString("wpa-default-max-disruption")
 	awsRegions := parseRegions(v.Viper.GetString("aws-regions"))
 	kubeConfigPath := v.Viper.GetString("kube-config")
-	shortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
-	longPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
+	sqsShortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
+	sqsLongPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
+	beanstalkShortPollInterval := v.Viper.GetInt(
+		"beanstalk-short-poll-interval")
+	beanstalkLongPollInterval := v.Viper.GetInt("beanstalk-long-poll-interval")
+	queueServicesToStartWith := v.Viper.GetString("queue-services")
 	metricsPort := v.Viper.GetString("metrics-port")
 	k8sApiQPS := float32(v.Viper.GetFloat64("k8s-api-qps"))
 	k8sApiBurst := v.Viper.GetInt("k8s-api-burst")
@@ -135,36 +146,66 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	queues := queue.NewQueues()
 	go queues.Sync(stopCh)
 
+	var queuingServices []queue.QueuingService
+
 	// Make all the message service providers and start their pollers
-	sqs, err := queue.NewSQS(awsRegions, queues, shortPollInterval, longPollInterval)
-	if err != nil {
-		klog.Fatalf("Error creating sqs Poller: %v", err)
+	for _, q := range strings.Split(queueServicesToStartWith, ",") {
+		q = strings.TrimSpace(q)
+		switch q {
+		case queue.SqsQueueService:
+			sqs, err := queue.NewSQS(
+				queue.SqsQueueService,
+				awsRegions, queues, sqsShortPollInterval, sqsLongPollInterval)
+			if err != nil {
+				klog.Fatalf("Error creating sqs Poller: %v", err)
+			}
+
+			queuingServices = append(queuingServices, sqs)
+		case queue.BeanstalkQueueService:
+			bs, err := queue.NewBeanstalk(
+				queue.BeanstalkQueueService,
+				queues, beanstalkShortPollInterval, beanstalkLongPollInterval)
+			if err != nil {
+				klog.Fatalf("Error creating bs Poller: %v", err)
+			}
+
+			queuingServices = append(queuingServices, bs)
+		default:
+			klog.Fatal("Unsupported queue provider: ", q)
+		}
 	}
 
-	sqsPoller := queue.NewPoller(queues, sqs)
-	for _, poller := range []queue.Poller{sqsPoller} {
+	for _, queuingService := range queuingServices {
+		go queuingService.Sync(stopCh)
+		poller := queue.NewPoller(queues, queuingService)
+		go poller.Sync(stopCh)
 		go poller.Run(stopCh)
 	}
-	go sqs.Sync(stopCh)
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncPeriod)
-	customInformerFactory := informers.NewSharedInformerFactory(customClient, resyncPeriod)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(
+		kubeClient, resyncPeriod)
+	customInformerFactory := informers.NewSharedInformerFactory(
+		customClient, resyncPeriod)
 
-	controller := workerpodautoscalercontroller.NewController(kubeClient, customClient,
+	controller := workerpodautoscalercontroller.NewController(
+		kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
 		customInformerFactory.K8s().V1alpha1().WorkerPodAutoScalers(),
 		wpaDefaultMaxDisruption,
 		queues,
 	)
 
-	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
-	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
+	// notice that there is no need to run Start methods in a
+	// separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
+	// Start method is non-blocking and runs all registered
+	// informers in a dedicated goroutine.
 	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 
 	go serveMetrics(metricsPort)
 
-	// TODO: autoscale the worker threads based on number of queues registred in WPA
+	// TODO: autoscale the worker threads based on number of
+	// queues registred in WPA
 	if err = controller.Run(wpaThraeds, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}

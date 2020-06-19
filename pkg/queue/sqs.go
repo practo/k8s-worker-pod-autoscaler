@@ -19,6 +19,7 @@ import (
 // SQS is used to by the Poller to get the queue
 // information from AWS SQS, it implements the QueuingService interface
 type SQS struct {
+	name          string
 	queues        *Queues
 	sqsClientPool map[string]*sqs.SQS
 	cwClientPool  map[string]*cloudwatch.CloudWatch
@@ -44,6 +45,7 @@ type SQS struct {
 }
 
 func NewSQS(
+	name string,
 	awsRegions []string,
 	queues *Queues,
 	shortPollInterval int,
@@ -66,6 +68,7 @@ func NewSQS(
 	}
 
 	return &SQS{
+		name:          name,
 		queues:        queues,
 		sqsClientPool: sqsClientPool,
 		cwClientPool:  cwClientPool,
@@ -216,28 +219,6 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 	return 0.0, nil
 }
 
-func (s *SQS) Sync(stopCh <-chan struct{}) {
-	for {
-		select {
-		case update := <-s.cacheSentMessagesUpdateCh:
-			for key, value := range update {
-				s.cacheSentMessages[key] = value
-			}
-		case update := <-s.cacheReceiveMessagesUpdateCh:
-			for key, value := range update {
-				s.cacheReceiveMessages[key] = value
-			}
-		case cacheResultCh := <-s.cacheSentMessagesListCh:
-			cacheResultCh <- s.cacheSentMessages
-		case cacheResultCh := <-s.cacheReceiveMessagesListCh:
-			cacheResultCh <- s.cacheReceiveMessages
-		case <-stopCh:
-			klog.Info("Stopping sqs syncer gracefully.")
-			return
-		}
-	}
-}
-
 func (s *SQS) listAllSentMessageCache() map[string]float64 {
 	cacheResultCh := make(chan map[string]float64)
 	s.cacheSentMessagesListCh <- cacheResultCh
@@ -372,6 +353,38 @@ func (s *SQS) waitForShortPollInterval() {
 	time.Sleep(s.shortPollInterval)
 }
 
+// TODO: get rid of string parsing
+func getRegion(queueURI string) string {
+	regionDns := strings.Split(queueURI, "/")[2]
+	return strings.Split(regionDns, ".")[1]
+}
+
+func (s *SQS) GetName() string {
+	return s.name
+}
+
+func (s *SQS) Sync(stopCh <-chan struct{}) {
+	for {
+		select {
+		case update := <-s.cacheSentMessagesUpdateCh:
+			for key, value := range update {
+				s.cacheSentMessages[key] = value
+			}
+		case update := <-s.cacheReceiveMessagesUpdateCh:
+			for key, value := range update {
+				s.cacheReceiveMessages[key] = value
+			}
+		case cacheResultCh := <-s.cacheSentMessagesListCh:
+			cacheResultCh <- s.cacheSentMessages
+		case cacheResultCh := <-s.cacheReceiveMessagesListCh:
+			cacheResultCh <- s.cacheReceiveMessages
+		case <-stopCh:
+			klog.Info("Stopping sqs syncer gracefully.")
+			return
+		}
+	}
+}
+
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if queueSpec.workers == 0 && queueSpec.messages == 0 && queueSpec.messagesSentPerMinute == 0 {
 		s.queues.updateIdleWorkers(key, -1)
@@ -393,6 +406,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 			} else {
 				klog.Errorf("Unable to receive message from queue %q, %v.",
 					queueSpec.name, err)
+				return
 			}
 		}
 
@@ -405,6 +419,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		if err != nil {
 			klog.Errorf("Unable to fetch no of messages to the queue %q, %v.",
 				queueSpec.name, err)
+			return
 		}
 		s.queues.updateMessageSent(key, messagesSentPerMinute)
 		klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
@@ -423,6 +438,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		} else {
 			klog.Errorf("Unable to get approximate messages in queue %q, %v.",
 				queueSpec.name, err)
+			return
 		}
 	}
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
@@ -450,6 +466,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		} else {
 			klog.Errorf("Unable to get approximate messages not visible in queue %q, %v.",
 				queueSpec.name, err)
+			return
 		}
 	}
 	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
@@ -485,10 +502,4 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	s.queues.updateIdleWorkers(key, idleWorkers)
 	s.waitForShortPollInterval()
 	return
-}
-
-// TODO: get rid of string parsing
-func getRegion(queueURI string) string {
-	regionDns := strings.Split(queueURI, "/")[2]
-	return strings.Split(regionDns, ".")[1]
 }

@@ -10,16 +10,16 @@ import (
 // the configured message queuing service provider
 type Poller struct {
 	queues         *Queues
-	service        QueuingService
+	queueService   QueuingService
 	threads        map[string]bool
 	listThreadCh   chan chan map[string]bool
 	updateThreadCh chan map[string]bool
 }
 
-func NewPoller(queues *Queues, service QueuingService) Poller {
-	return Poller{
+func NewPoller(queues *Queues, queueService QueuingService) *Poller {
+	return &Poller{
 		queues:         queues,
-		service:        service,
+		queueService:   queueService,
 		threads:        make(map[string]bool),
 		listThreadCh:   make(chan chan map[string]bool),
 		updateThreadCh: make(chan map[string]bool),
@@ -43,7 +43,7 @@ func (p *Poller) runPollThread(key string) {
 		if queueSpec.name == "" {
 			return
 		}
-		p.service.poll(key, queueSpec)
+		p.queueService.poll(key, queueSpec)
 	}
 }
 
@@ -59,7 +59,7 @@ func (p *Poller) listThreads() map[string]bool {
 	return <-listResultCh
 }
 
-func (p *Poller) sync(stopCh <-chan struct{}) {
+func (p *Poller) Sync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case listResultCh := <-p.listThreadCh:
@@ -72,20 +72,19 @@ func (p *Poller) sync(stopCh <-chan struct{}) {
 				p.threads[key] = status
 			}
 		case <-stopCh:
-			klog.Info("Stopping sync thread of sqs poller gracefully.")
+			klog.Info("Stopping sync thread of poller gracefully.")
 			return
 		}
 	}
 }
 
 func (p *Poller) Run(stopCh <-chan struct{}) {
-	go p.sync(stopCh)
-
 	ticker := time.NewTicker(time.Second * 1)
+	queueServiceName := p.queueService.GetName()
 	for {
 		select {
 		case <-ticker.C:
-			queues := p.queues.List()
+			queues := p.queues.List(queueServiceName)
 			// Create a new thread
 			for key, _ := range queues {
 				threads := p.listThreads()
@@ -102,7 +101,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 				}
 			}
 		case <-stopCh:
-			klog.Info("Stopping sqs poller(s) and thread manager gracefully.")
+			klog.Info("Stopping poller(s) and thread manager gracefully.")
 			return
 		}
 	}

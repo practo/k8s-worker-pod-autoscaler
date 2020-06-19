@@ -8,7 +8,11 @@
 
 Scale kubernetes pods based on the Queue length of a queue in a Message Queueing Service. Worker Pod Autoscaler automatically scales the number of pods in a deployment based on observed queue length.
 
-Currently the supported Message Queueing Services is only AWS SQS. There is a plan to integrate other commonly used message queing services.
+Currently the supported Message Queueing Services are:
+- [AWS SQS](https://aws.amazon.com/sqs/)
+- [Beanstalkd](https://beanstalkd.github.io/)
+
+There is a plan to integrate other commonly used message queing services.
 
 ----
 
@@ -51,7 +55,6 @@ This will start scaling `example-deployment` based on SQS queue length.
 ## Configuration
 
 ## WPA Resource
-
 ```yaml
 apiVersion: k8s.practo.dev/v1alpha1
 kind: WorkerPodAutoScaler
@@ -66,8 +69,9 @@ spec:
   secondsToProcessOneJob: 0.03
   maxDisruption: "100%"
 ```
+Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tube`
 
-### Flags documentation:
+### WPA Spec documentation:
 - **minReplicas**: minimum number of workers you want to run. (mandatory)
 - **maxReplicas**: maximum number of workers you want to run. (mandatory)
 - **deploymentName**: name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
@@ -96,16 +100,24 @@ Examples:
 
 Flags:
       --aws-regions string                  comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
+      --beanstalk-long-poll-interval int    the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive (default 20)
+      --beanstalk-short-poll-interval int   the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length (default 20)
   -h, --help                                help for run
       --k8s-api-burst int                   maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
       --k8s-api-qps float                   qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
       --kube-config string                  path of the kube config file, if not specified in cluster config is used
       --metrics-port string                 specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
+      --queue-services string               comma separated queue services, the WPA will start with (default "sqs,beanstalkd")
       --resync-period int                   sync period for the worker pod autoscaler (default 20)
       --sqs-long-poll-interval int          the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
       --sqs-short-poll-interval int         the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
       --wpa-default-max-disruption string   it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage. (default "100%")
       --wpa-threads int                     wpa threadiness, number of threads to process wpa resources (default 10)
+```
+
+If you need to enable multiple queue support, you can add queues comma separated in `--queue-services`. For example, if beanstalkd is started and there is no WPA beanstalk resource present, then nothing happens, until a beanstalk WPA resource is created. Queue poller service only operates on the filtered WPA objects.
+```
+--queue-services=sqs,beanstalkd
 ```
 
 ### Troubleshoot (running WPA at scale)
