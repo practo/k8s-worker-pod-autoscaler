@@ -1,7 +1,7 @@
 package main
 
 import (
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
