@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+
 	"k8s.io/klog/v2"
 
 	"github.com/spf13/cobra"
@@ -15,21 +17,17 @@ var rootCmd = &cobra.Command{
 	Long:  "workerpodautoscaler scales the kubernetes deployments based on queue length",
 }
 
-func localFlags(flags *pflag.FlagSet) {
-}
-
 func init() {
+	klog.InitFlags(nil)
 	cobra.OnInitialize(func() {
 		cmdutil.CheckErr(cmdutil.InitConfig("workerpodautoscaler"))
 	})
 
-	flags := rootCmd.PersistentFlags()
-	localFlags(flags)
+	rootCmd.PersistentFlags()
+	pflag.CommandLine.AddGoFlag(flag.CommandLine.Lookup("v"))
 }
 
 func main() {
-	klog.InitFlags(nil)
-
 	versionCommand := (&versionCmd{}).new()
 	runCommand := (&runCmd{}).new()
 
