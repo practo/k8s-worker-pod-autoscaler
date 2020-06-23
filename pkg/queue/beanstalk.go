@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
-	"k8s.io/klog/v2"
+	"github.com/practo/klog/v2"
 )
 
 // Beanstalk is used to by the Poller to get the queue

@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"k8s.io/klog/v2"
+	"github.com/practo/klog/v2"
 )
 
 var (
