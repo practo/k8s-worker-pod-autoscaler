@@ -413,6 +413,7 @@ func init() {
 	logging.skipHeaders = false
 	logging.addDirHeader = false
 	logging.skipLogHeaders = false
+	logging.hooks = Hooks{}
 	go logging.flushDaemon()
 }
 
@@ -441,6 +442,10 @@ func InitFlags(flagset *flag.FlagSet) {
 // Flush flushes all pending log I/O.
 func Flush() {
 	logging.lockAndFlushAll()
+}
+
+func AddHook(hook Hook) {
+	logging.addHook(hook)
 }
 
 // loggingT collects all the global state of the logging setup.
@@ -505,6 +510,9 @@ type loggingT struct {
 
 	// If set, all output will be redirected unconditionally to the provided logr.Logger
 	logr logr.Logger
+
+	// hooks to fire based on severity
+	hooks Hooks
 }
 
 // buffer holds a byte Buffer for reuse. The zero value is ready for use.
@@ -697,6 +705,7 @@ func (l *loggingT) println(s severity, logr logr.Logger, args ...interface{}) {
 	}
 	fmt.Fprintln(buf, args...)
 	l.output(s, logr, buf, file, line, false)
+	l.fireHooks(s)
 }
 
 func (l *loggingT) print(s severity, logr logr.Logger, args ...interface{}) {
@@ -716,6 +725,7 @@ func (l *loggingT) printDepth(s severity, logr logr.Logger, depth int, args ...i
 		buf.WriteByte('\n')
 	}
 	l.output(s, logr, buf, file, line, false)
+	l.fireHooks(s)
 }
 
 func (l *loggingT) printf(s severity, logr logr.Logger, format string, args ...interface{}) {
@@ -731,6 +741,7 @@ func (l *loggingT) printf(s severity, logr logr.Logger, format string, args ...i
 		buf.WriteByte('\n')
 	}
 	l.output(s, logr, buf, file, line, false)
+	l.fireHooks(s)
 }
 
 // printWithFileLine behaves like print but uses the provided file and line number.  If
@@ -749,6 +760,7 @@ func (l *loggingT) printWithFileLine(s severity, logr logr.Logger, file string, 
 		buf.WriteByte('\n')
 	}
 	l.output(s, logr, buf, file, line, alsoToStderr)
+	l.fireHooks(s)
 }
 
 // if loggr is specified, will call loggr.Error, otherwise output with logging module.
@@ -1020,6 +1032,23 @@ func (l *loggingT) exit(err error) {
 	}
 	l.flushAll()
 	os.Exit(2)
+}
+
+// addHook adds a Hook to logging
+func (l *loggingT) addHook(hook Hook) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	err := l.hooks.Add(hook)
+	if err != nil {
+		l.exit(err)
+	}
+}
+
+func (l *loggingT) fireHooks(s severity) {
+	err := l.hooks.Fire(s)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to fire hook: %v\n", err)
+	}
 }
 
 // syncBuffer joins a bufio.Writer to its underlying file, providing access to the
