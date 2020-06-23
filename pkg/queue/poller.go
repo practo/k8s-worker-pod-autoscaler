@@ -3,7 +3,7 @@ package queue
 import (
 	"time"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // Poller is the generic poller which manages polling of queues from

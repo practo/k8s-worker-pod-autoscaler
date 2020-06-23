@@ -7,7 +7,7 @@ import (
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // InitConfig constructs the configuration from a local configuration file
