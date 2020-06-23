@@ -3,7 +3,7 @@ package v1alpha1
 import (
 	"reflect"
 
-	"k8s.io/klog/v2"
+	"github.com/practo/klog/v2"
 
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler"
 

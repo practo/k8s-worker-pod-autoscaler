@@ -1,7 +1,7 @@
 package queue
 
 import (
-	"k8s.io/klog/v2"
+	"github.com/practo/klog/v2"
 	"os/exec"
 	"testing"
 	"time"

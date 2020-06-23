@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"k8s.io/klog/v2"
+	"github.com/practo/klog/v2"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
