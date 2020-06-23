@@ -113,6 +113,9 @@ Flags:
       --sqs-short-poll-interval int         the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
       --wpa-default-max-disruption string   it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage. (default "100%")
       --wpa-threads int                     wpa threadiness, number of threads to process wpa resources (default 10)
+
+Global Flags:
+  -v, --v Level   number for the log level verbosity
 ```
 
 If you need to enable multiple queue support, you can add queues comma separated in `--queue-services`. For example, if beanstalkd is started and there is no WPA beanstalk resource present, then nothing happens, until a beanstalk WPA resource is created. Queue poller service only operates on the filtered WPA objects.
