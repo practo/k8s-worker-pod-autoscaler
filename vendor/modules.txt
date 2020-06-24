@@ -118,7 +118,7 @@ github.com/pelletier/go-toml
 # github.com/practo/klog/v2 v2.2.1
 ## explicit
 github.com/practo/klog/v2
-# github.com/practo/promlog v1.0.0-beta.1
+# github.com/practo/promlog v1.0.0-beta.2
 ## explicit
 github.com/practo/promlog
 # github.com/prometheus/client_golang v1.7.0

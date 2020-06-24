@@ -8,7 +8,7 @@ require (
 	github.com/golang/mock v1.4.3
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/practo/klog/v2 v2.2.1
-	github.com/practo/promlog v1.0.0-beta.1
+	github.com/practo/promlog v1.0.0-beta.2
 	github.com/prometheus/client_golang v1.7.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.3

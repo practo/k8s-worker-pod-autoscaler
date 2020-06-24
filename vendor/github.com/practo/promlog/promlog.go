@@ -22,9 +22,9 @@ type PrometheusHook struct {
 // caller in case of issue.
 // Use NewPrometheusHook if you want more control.
 // Use MustNewPrometheusHook if you want a less verbose hook creation.
-func NewPrometheusHook() (*PrometheusHook, error) {
+func NewPrometheusHook(metricPrefix string) (*PrometheusHook, error) {
 	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "log_messages_total",
+		Name:  metricPrefix + "log_messages_total",
 		Help: "Total number of log messages.",
 	}, []string{"severity"})
 	// Initialise counters for all supported severity:
@@ -52,8 +52,8 @@ func NewPrometheusHook() (*PrometheusHook, error) {
 // any error to the caller, but panics instead.
 // Use MustNewPrometheusHook if you want a less verbose
 // hook creation. Use NewPrometheusHook if you want more control.
-func MustNewPrometheusHook() *PrometheusHook {
-	hook, err := NewPrometheusHook()
+func MustNewPrometheusHook(metricPrefix string) *PrometheusHook {
+	hook, err := NewPrometheusHook(metricPrefix)
 	if err != nil {
 		panic(err)
 	}

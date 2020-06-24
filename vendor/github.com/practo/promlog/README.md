@@ -1,9 +1,9 @@
 # promlog
 [forked klog](https://github.com/practo/klog) hook to expose the number of log messages as Prometheus metrics:
 ```
-log_messages{level="INFO"}
-log_messages{level="WARNING"}
-log_messages{level="ERROR"}
+log_messages_total{severity="ERROR"} 0
+log_messages_total{severity="INFO"} 42
+log_messages_total{severity="WARNING"} 0
 ```
 
 ## Usage
@@ -17,24 +17,25 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/practo/klog/v2"
+	"github.com/practo/klog/v2"
 	"github.com/practo/promlog"
 )
 
 func main() {
 	// Create the Prometheus hook:
-	hook := promlog.MustNewPrometheusHook()
+	hook := promlog.MustNewPrometheusHook("")
 
 	// Configure klog to use the Prometheus hook:
-	log.AddHook(hook)
+	klog.AddHook(hook)
 
 	// Expose Prometheus metrics via HTTP, as you usually would:
 	go http.ListenAndServe(":8080", promhttp.Handler())
 
 	// Log with klog, as you usually would.
-	// Every time the program generates a log message, a Prometheus counter is incremented for the corresponding level.
+	// Every time the program generates a log message,
+	// a Prometheus counter is incremented for the corresponding level.
 	for {
-		log.Infof("foo")
+		klog.Infof("foo")
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -43,10 +44,11 @@ func main() {
 Run the above program:
 ```
 $ cd example && go run main.go
-I0624 12:24:55.951218   46000 main.go:25] foo
-I0624 12:24:56.952746   46000 main.go:25] foo
-I0624 12:24:57.953113   46000 main.go:25] foo
-I0624 12:24:58.954579   46000 main.go:25] foo
+I0624 13:26:39.035027   51136 main.go:26] foo
+I0624 13:26:40.035543   51136 main.go:26] foo
+I0624 13:26:41.039174   51136 main.go:26] foo
+I0624 13:26:42.039930   51136 main.go:26] foo
+I0624 13:26:43.041310   51136 main.go:26] foo
 ```
 
 Scrape the Prometheus metrics exposed by the hook:
@@ -67,10 +69,9 @@ $ go build
 ## Test
 ```
 $ go test
-I0624 12:28:12.049327   46304 promlog_test.go:48] this is at info level!
-W0624 12:28:12.050440   46304 promlog_test.go:54] this is at warning level!
-E0624 12:28:12.052603   46304 promlog_test.go:60] this is at error level!
+I0624 13:27:29.696765   51237 promlog_test.go:49] this is at info level!
+W0624 13:27:29.697785   51237 promlog_test.go:55] this is at warning level!
+E0624 13:27:29.698964   51237 promlog_test.go:61] this is at error level!
 PASS
-ok  	github.com/practo/promlog	0.336s
-
+ok  	github.com/practo/promlog	0.237s
 ```
