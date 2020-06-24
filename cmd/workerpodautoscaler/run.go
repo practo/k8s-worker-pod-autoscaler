@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/practo/klog/v2"
+	"github.com/practo/promlog"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -111,6 +112,9 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	metricsPort := v.Viper.GetString("metrics-port")
 	k8sApiQPS := float32(v.Viper.GetFloat64("k8s-api-qps"))
 	k8sApiBurst := v.Viper.GetInt("k8s-api-burst")
+
+	hook := promlog.MustNewPrometheusHook("wpa_")
+	klog.AddHook(hook)
 
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
