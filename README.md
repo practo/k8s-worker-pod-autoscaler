@@ -72,10 +72,10 @@ spec:
 Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tube`
 
 ### WPA Spec documentation:
-- **minReplicas**: minimum number of workers you want to run. (mandatory)
-- **maxReplicas**: maximum number of workers you want to run. (mandatory)
-- **deploymentName**: name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
-- **queueURI**: full URL of the queue. (mandatory)
+- **minReplicas**: Minimum number of workers you want to run. (mandatory)
+- **maxReplicas**: Maximum number of workers you want to run. (mandatory)
+- **deploymentName**: Name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
+- **queueURI**: Full URL of the queue. (mandatory)
 - **targetMessagesPerWorker**: Number of jobs in the queue which have not been picked up by the workers. This also used to calculate the desired number of workers. (mandatory)
 - **secondsToProcessOneJob:**: This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds. (optional, highly recommended, default=0.0 i.e. disabled)
 - **maxDisruption:** amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity. Using this you can control how fast a scale down can happen. This can be expressed both as an absolute value and a percentage. Explained with the help of some examples: (optional, default is the WPA flag `wpa-default-max-disruption`)
@@ -183,11 +183,11 @@ git pull origin master
 - Build and push the image to `hub.docker.com/practodev`. Note: practodev push access is required.
 ```
 git fetch --tags
-git tag v1.0.0-beta
+git tag v1.0.0
 make push
 ```
 
-- Create a Release in Github. Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.0.0-beta and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
+- Create a Release in Github. Refer this https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.0.0 and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
 
 -  Publish the release in Github 🎉
 

@@ -2,6 +2,7 @@
 
 set -e
 
+crd='./artifacts/crd.yaml'
 serviceaccount='./artifacts/serviceaccount.yaml'
 clusterrole='./artifacts/clusterrole.yaml'
 clusterrolebinding='./artifacts/clusterrolebinding.yaml'
@@ -21,13 +22,17 @@ if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
     exit 1
 fi
 
+echo "Creating CRD..."
+kubectl apply -f ${crd}
+
+echo "Generating Deployment Manifest..."
 export WPA_AWS_REGIONS="${AWS_REGIONS}"
 export WPA_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
 export WPA_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-
 cp -f $template_deployment $new_deployment
 ./hack/generate.sh ${new_deployment}
 
+echo "Applying manifests.."
 kubectl apply -f ${serviceaccount}
 kubectl apply -f ${clusterrole}
 kubectl apply -f ${clusterrolebinding}
