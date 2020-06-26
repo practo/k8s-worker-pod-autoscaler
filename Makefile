@@ -31,6 +31,18 @@ BASEIMAGE ?= gcr.io/distroless/static
 
 IMAGE := $(REGISTRY)/$(BIN)
 TAG := $(VERSION)
+BETA := v1.0.0-beta
+
+ifneq (,$(findstring $(BETA),$(TAG)))
+    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(BETA)
+else
+    PUBLISH_TAGS := $(IMAGE):$(TAG)
+endif
+
+define \n
+
+
+endef
 
 BUILD_IMAGE ?= golang:1.14.2-alpine
 TEST_IMAGE ?= practodev/golang:1.14.2-alpine-test
@@ -140,7 +152,7 @@ container: .container-$(DOTFILE_IMAGE) say_container_name
 	    -e 's|{ARG_OS}|$(OS)|g'          \
 	    -e 's|{ARG_FROM}|$(BASEIMAGE)|g' \
 	    Dockerfile.in > .dockerfile-$(OS)_$(ARCH)
-	@docker build -t $(IMAGE):$(TAG) -f .dockerfile-$(OS)_$(ARCH) .
+	@docker build $(foreach T, $(PUBLISH_TAGS), -t $(T)) -f .dockerfile-$(OS)_$(ARCH) .
 	@docker images -q $(IMAGE):$(TAG) > $@
 
 say_container_name:
@@ -148,10 +160,10 @@ say_container_name:
 
 push: .push-$(DOTFILE_IMAGE) say_push_name
 .push-$(DOTFILE_IMAGE): .container-$(DOTFILE_IMAGE)
-	@docker push $(IMAGE):$(TAG)
+	@$(foreach T, $(PUBLISH_TAGS), docker push $(T) $(\n))
 
 say_push_name:
-	@echo "pushed: $(IMAGE):$(TAG)"
+	@$(foreach T, $(PUBLISH_TAGS), echo "pushed: $(T)" $(\n))
 
 manifest-list: push
 	platforms=$$(echo $(ALL_PLATFORMS) | sed 's/ /,/g');  \
