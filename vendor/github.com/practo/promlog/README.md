@@ -1,4 +1,8 @@
 # promlog
+
+[![GoDoc Widget]][GoDoc]
+
+---
 [forked klog](https://github.com/practo/klog) hook to expose the number of log messages as Prometheus metrics:
 ```
 log_messages_total{severity="ERROR"} 0
@@ -23,7 +27,7 @@ import (
 
 func main() {
 	// Create the Prometheus hook:
-	hook := promlog.MustNewPrometheusHook("")
+	hook := promlog.MustNewPrometheusHook("", klog.InfoSeverityLevel)
 
 	// Configure klog to use the Prometheus hook:
 	klog.AddHook(hook)
@@ -75,3 +79,6 @@ E0624 13:27:29.698964   51237 promlog_test.go:61] this is at error level!
 PASS
 ok  	github.com/practo/promlog	0.237s
 ```
+
+[GoDoc]: https://godoc.org/github.com/practo/promlog
+[GoDoc Widget]: https://godoc.org/github.com/practo/k8s-worker-pod-autoscaler?status.svg

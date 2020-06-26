@@ -202,8 +202,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/practo/klog/v2 v2.2.1 h1:yV/SavG73KHSmCVwtDap1RGe+2jd86e1eugT+Mv2/FA=
 github.com/practo/klog/v2 v2.2.1/go.mod h1:WMkpfPwTxLgSLookpI4UUv2zL7tMltKACK/FHB1zLV0=
-github.com/practo/promlog v1.0.0-beta.2 h1:ZNmzsVpIkPcubdUudtCn6J9Q16MU0HxSk1VB8DgktzQ=
-github.com/practo/promlog v1.0.0-beta.2/go.mod h1:gNtTwdRfC4UHAqBDWZ8xrSSFtACV689gWvpgGobYHXM=
+github.com/practo/promlog v1.0.0 h1:rPvp79Sa2IE6c0WqKtJanOXWLXdD4lyxCnl22CsohEI=
+github.com/practo/promlog v1.0.0/go.mod h1:gNtTwdRfC4UHAqBDWZ8xrSSFtACV689gWvpgGobYHXM=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.2/go.mod h1:OsXs2jCmiKlQ1lTBmv21f2mNfw4xf/QclQDMrYNZzcM=
 github.com/prometheus/client_golang v0.9.3 h1:9iH4JKXLzFbOAdtqv/a+j8aewx2Y8lAjAydhbaScPF8=
