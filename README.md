@@ -142,7 +142,6 @@ wpa_controller_loop_duration_seconds{workerpodautoscaler="example-wpa", namespac
 
 wpa_log_messages_total{severity="ERROR"} 0
 wpa_log_messages_total{severity="WARNING"} 0
-wpa_log_messages_total{severity="INFO"} 0
 
 go_goroutines{endpoint="workerpodautoscaler-metrics"} 40
 ```
