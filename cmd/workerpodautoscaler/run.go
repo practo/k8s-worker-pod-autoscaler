@@ -23,7 +23,6 @@ import (
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions"
 	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
 type runCmd struct {
@@ -134,11 +133,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	customClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
 		klog.Fatalf("Error building custom clientset: %s", err.Error())
-	}
-
-	apiExtensionClient, err := apiextensionsclient.NewForConfig(cfg)
-	if err != nil {
-		klog.Fatalf("Error creating api extension client: %s", err.Error())
 	}
 
 	queues := queue.NewQueues()

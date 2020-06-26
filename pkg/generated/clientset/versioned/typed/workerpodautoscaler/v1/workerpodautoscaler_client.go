@@ -34,7 +34,7 @@ type K8sV1Client struct {
 	restClient rest.Interface
 }
 
-func (c *K8sv1Client) WorkerPodAutoScalers(namespace string) WorkerPodAutoScalerInterface {
+func (c *K8sV1Client) WorkerPodAutoScalers(namespace string) WorkerPodAutoScalerInterface {
 	return newWorkerPodAutoScalers(c, namespace)
 }
 
