@@ -46,6 +46,7 @@ spec:
                 description: 'Name of the kubernetes deployment in the same namespace as WPA object'
               maxDisruption:
                 type: string
+                nullable: true
                 description: 'Amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity'
               maxReplicas:
                 type: integer
@@ -65,6 +66,7 @@ spec:
               secondsToProcessOneJob:
                 type: number
                 format: float
+                nullable: true
                 description: 'This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds'
   - name: v1alpha1
     served: true
