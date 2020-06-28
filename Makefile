@@ -31,9 +31,9 @@ BASEIMAGE ?= gcr.io/distroless/static
 
 IMAGE := $(REGISTRY)/$(BIN)
 TAG := $(VERSION)
-BETA := v1.0.0-beta
+BETA := v1.0-beta
 
-ifneq (,$(findstring $(BETA),$(TAG)))
+ifneq (,$(findstring v1.0,$(TAG))$(findstring -beta,$(TAG)))
     PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(BETA)
 else
     PUBLISH_TAGS := $(IMAGE):$(TAG)
