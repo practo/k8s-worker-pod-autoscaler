@@ -12,14 +12,14 @@ Currently the supported Message Queueing Services are:
 - [AWS SQS](https://aws.amazon.com/sqs/)
 - [Beanstalkd](https://beanstalkd.github.io/)
 
-There is a plan to integrate other commonly used message queing services.
+There is a plan to integrate other commonly used message queuing services.
 
 ----
 
 # Install the WorkerPodAutoscaler
 
 ### Install
-Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and start the controller. The controller watches over all the specified queues in AWS SQS and scales the Kubernetes deployments based on the specification.
+Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and install the worker pod autoscaler deployment.
 
 ```bash
 export AWS_REGIONS='ap-south-1,ap-southeast-1'
@@ -28,7 +28,7 @@ export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh
 ```
 
-Note: IAM policy required is [this](artifacts/iam-policy.json).
+Note: IAM policy required is [this](artifacts/iam-policy.json), and the AWS credential can be passed as `""` if not using SQS.
 
 ### Verify Installation
 Check the wpa resource is accessible using kubectl
@@ -38,7 +38,7 @@ kubectl get wpa
 ```
 
 # Example
-Do install the controller before going with the example.
+Do install the wpa crd and wpa deployment before going with the example. (Please check above.)
 
 - Create Deployment that needs to scale based on queue length.
 ```bash
@@ -56,7 +56,7 @@ This will start scaling `example-deployment` based on SQS queue length.
 
 ## WPA Resource
 ```yaml
-apiVersion: k8s.practo.dev/v1alpha1
+apiVersion: k8s.practo.dev/v1
 kind: WorkerPodAutoScaler
 metadata:
   name: example-wpa
@@ -71,14 +71,19 @@ spec:
 ```
 Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tube`
 
-### WPA Spec documentation:
-- **minReplicas**: Minimum number of workers you want to run. (mandatory)
-- **maxReplicas**: Maximum number of workers you want to run. (mandatory)
-- **deploymentName**: Name of the kubernetes deployment in the same namespace as WPA object. (mandatory)
-- **queueURI**: Full URL of the queue. (mandatory)
-- **targetMessagesPerWorker**: Number of jobs in the queue which have not been picked up by the workers. This also used to calculate the desired number of workers. (mandatory)
-- **secondsToProcessOneJob:**: This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds. (optional, highly recommended, default=0.0 i.e. disabled)
-- **maxDisruption:** amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity. Using this you can control how fast a scale down can happen. This can be expressed both as an absolute value and a percentage. Explained with the help of some examples: (optional, default is the WPA flag `wpa-default-max-disruption`)
+### WPA Spec Documentation:
+
+| Spec          | Description   | Mandatory |
+| :------------ | :----------- |:------------|
+| minReplicas    | Minimum number of workers you want to run.                                | Yes |
+| maxReplicas    | Maximum number of workers you want to run                                 | Yes |
+| deploymentName | Name of the kubernetes deployment in the same namespace as WPA object. | Yes |
+| queueURI       | Full URL of the queue.                                                 | Yes |
+| targetMessagesPerWorker |  Number of jobs in the queue which have not been picked up by the workers. This is also used to calculate the desired number of workers. | Yes |
+| secondsToProcessOneJob | This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds. (highly recommended, default=0.0 i.e. disabled). | No |
+| maxDisruption | Amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity. Using this you can control how fast a scale down can happen. This can be expressed both as an absolute value and a percentage. (default is the WPA flag `wpa-default-max-disruption`). | No |
+
+`maxDisruption` explained with the help of some examples:
 ```
 min=2, max=1000, current=500, maxDisruption=50%: then the scale down cannot bring down more than 250 pods in a single scale down activity.
 ```
@@ -127,7 +132,7 @@ If you need to enable multiple queue support, you can add queues comma separated
 
 Running WPA at scale require changes in `--k8s-api-burst` and `--k8s-api-qps` flags.
 
-WPA makes update to Kubernetes API to update the WPA status. WPA uses [client-go](https://github.com/kubernetes/client-go) as the kubernetes client to make Kubernetes API calls. This client allows 5QPS and 10Burst requests to Kubernetes API by default. The defaults can be changed by using `k8s-api-burst` and `k8s-api-qps` flags.
+WPA makes call to the Kubernetes API to update the WPA resource status. [client-go](https://github.com/kubernetes/client-go) is used as the kubernetes client to make the Kubernetes API calls. This client allows 5QPS and 10Burst requests to Kubernetes API by default. The defaults can be changed by using `k8s-api-burst` and `k8s-api-qps` flags.
 
 You may need to increase the `--k8s-api-qps` and `k8s-api-burst` if [wpa_controller_loop_duration_seconds](https://github.com/practo/k8s-worker-pod-autoscaler/tree/master#wpa-metrics) is greater than 200ms (wpa_controller_loop_duration_seconds>0.200)
 
@@ -199,7 +204,7 @@ kubectl edit deployment -n kube-system workerpodautoscaler
 ```
 
 ## Contributing
-It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queueing_service.go#L5-L14) implementation needs to be written down to make that possible.
+It would be really helpful to add all the major message queuing service providers. This [interface](https://github.com/practo/k8s-worker-pod-autoscaler/blob/master/pkg/queue/queue_service.go) implementation needs to be written down to make that possible.
 
 - After making code changes, run the below commands to build and run locally.
 ```
@@ -217,7 +222,7 @@ $ bin/darwin_amd64/workerpodautoscaler run --kube-config /home/user/.kube/config
 
 ## Thanks
 
-Thanks to kubernetes team for making [crds](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and [sample controller](https://github.com/kubernetes/sample-controller)
+Thanks to kubernetes team for making [crds](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and [sample controller](https://github.com/kubernetes/sample-controller). Thanks for [go-build-template](https://github.com/thockin/go-build-template).
 
 [latest-release]: https://github.com/practo/k8s-worker-pod-autoscaler/releases
 [GoDoc]: https://godoc.org/github.com/practo/k8s-worker-pod-autoscaler
