@@ -547,10 +547,11 @@ func (c *Controller) getDesiredWorkers(
 		)
 	}
 
-	// Attempt to do nothing, desired is same as current
+	// Attempt partial scale down since there is no backlog or in-processing
+	// messages.
 	return convertDesiredReplicasWithRules(
 		currentWorkers,
-		currentWorkers,
+		minWorkers,
 		minWorkers,
 		maxWorkers,
 		maxDisruptableWorkers,
