@@ -253,34 +253,14 @@ func (b *Beanstalk) getClient(
 	return client.(BeanstalkClientInterface), nil
 }
 
-func (b *Beanstalk) getApproxMessages(queueURI string) (int32, error) {
+func (b *Beanstalk) getMessages(queueURI string) (int32, int32, error) {
 	client, err := b.getClient(queueURI)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	jobsWaiting, _, _, err := client.getStats()
-	if err != nil {
-		return jobsWaiting, err
-	}
-
-	return jobsWaiting, nil
-}
-
-func (b *Beanstalk) getApproxMessagesNotVisible(
-	queueURI string) (int32, error) {
-
-	client, err := b.getClient(queueURI)
-	if err != nil {
-		return 0, err
-	}
-
-	_, _, jobsReserved, err := client.getStats()
-	if err != nil {
-		return jobsReserved, err
-	}
-
-	return jobsReserved, nil
+	jobsWaiting, _, jobsReserved, err := client.getStats()
+	return jobsWaiting, jobsReserved, err
 }
 
 func (b *Beanstalk) getIdleWorkers(queueURI string) (int32, error) {
@@ -368,14 +348,14 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 		// klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
 	}
 
-	approxMessages, err := b.getApproxMessages(queueSpec.uri)
+	approxMessages, approxMessagesNotVisible, err := b.getMessages(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
 		return
 	}
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
-	b.queues.updateMessage(key, approxMessages)
+	b.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 
 	if approxMessages != 0 {
 		b.queues.updateIdleWorkers(key, -1)
@@ -386,13 +366,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
 	// do not scale down as those messages are still being processed (and we dont know which worker)
-	approxMessagesNotVisible, err := b.getApproxMessagesNotVisible(
-		queueSpec.uri)
-	if err != nil {
-		klog.Errorf("Unable to get approximate messages not visible in queue %q, %v.",
-			queueSpec.name, err)
-		return
-	}
+
 	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {

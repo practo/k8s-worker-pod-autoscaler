@@ -40,9 +40,9 @@ type QueueSpec struct {
 	host             string
 	protocol         string
 	queueServiceName string
-	// messages is the number of messages in the queue which have not
-	// been picked up for processing by the worker
-	// SQS: ApproximateNumberOfMessagesVisible metric
+	// messages is the total number of messages in the queue that are either
+	// not picked up or is not completely processed by the worker
+	// SQS: ApproximateNumberOfMessagesVisible + ApproximateNumberOfMessagesNotVisible
 	messages int32
 	// messagesSent is the number of messages sent to the queue per minute
 	// SQS: NumberOfMessagesSent metric

@@ -442,13 +442,6 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		}
 	}
 	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
-	s.queues.updateMessage(key, approxMessages)
-
-	if approxMessages != 0 {
-		s.queues.updateIdleWorkers(key, -1)
-		s.waitForShortPollInterval()
-		return
-	}
 
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
@@ -470,6 +463,14 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		}
 	}
 	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+
+	s.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
+
+	if approxMessages != 0 {
+		s.queues.updateIdleWorkers(key, -1)
+		s.waitForShortPollInterval()
+		return
+	}
 
 	if approxMessagesNotVisible > 0 {
 		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
