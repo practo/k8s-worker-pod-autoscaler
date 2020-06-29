@@ -77,6 +77,7 @@ func TestPollSyncWhenNoMessagesInQueue(t *testing.T) {
 		},
 	}
 	messages := int32(0)
+	reserved := int32(0)
 	name := queueSpecs[0].name
 	namespace := queueSpecs[0].namespace
 	queueURI := getQueueURI(namespace, name)
@@ -114,8 +115,8 @@ func TestPollSyncWhenNoMessagesInQueue(t *testing.T) {
 		t.Errorf("expected %s qName, got=%v\n", name, nameGot)
 	}
 
-	if messagesGot != messages {
-		t.Errorf("expected 0 messages, got=%v\n", messages)
+	if messagesGot != messages+reserved {
+		t.Errorf("expected %v messages, got=%v\n", messages+reserved, messagesGot)
 	}
 
 	if messagesPerMinGot != -1 {
@@ -146,6 +147,7 @@ func TestPollSyncWhenMessagesInQueue(t *testing.T) {
 		},
 	}
 	messages := int32(25)
+	reserved := int32(0)
 	name := queueSpecs[0].name
 	namespace := queueSpecs[0].namespace
 	queueURI := getQueueURI(namespace, name)
@@ -183,8 +185,8 @@ func TestPollSyncWhenMessagesInQueue(t *testing.T) {
 		t.Errorf("expected %s qName, got=%v\n", name, nameGot)
 	}
 
-	if messagesGot != messages {
-		t.Errorf("expected 0 messages, got=%v\n", messages)
+	if messagesGot != messages+reserved {
+		t.Errorf("expected %v messages, got=%v\n", messages+reserved, messagesGot)
 	}
 
 	if messagesPerMinGot != -1 {
@@ -235,7 +237,7 @@ func TestPollSyncWhenNoMessagesInQueueButMessagesAreInFlight(t *testing.T) {
 		EXPECT().
 		getStats().
 		Return(messages, int32(0), reserved, nil).
-		Times(2)
+		Times(1)
 
 	// TODO: due to this call not able to use poller as an interface
 	poller.clientPool.Store(queueURI, mockBeanstalkClient)
@@ -252,8 +254,8 @@ func TestPollSyncWhenNoMessagesInQueueButMessagesAreInFlight(t *testing.T) {
 		t.Errorf("expected %s qName, got=%v\n", name, nameGot)
 	}
 
-	if messagesGot != messages {
-		t.Errorf("expected 0 messages, got=%v\n", messages)
+	if messagesGot != messages+reserved {
+		t.Errorf("expected 0 messages, got=%v\n", messagesGot)
 	}
 
 	if messagesPerMinGot != -1 {
@@ -305,7 +307,7 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 		EXPECT().
 		getStats().
 		Return(messages, currentWorkers, reserved, nil).
-		Times(3)
+		Times(2)
 
 	// TODO: due to this call not able to use poller as an interface
 	poller.clientPool.Store(queueURI, mockBeanstalkClient)
@@ -323,8 +325,8 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 		t.Errorf("expected %s qName, got=%v\n", name, nameGot)
 	}
 
-	if messagesGot != messages {
-		t.Errorf("expected 0 messages, got=%v\n", messages)
+	if messagesGot != messages+reserved {
+		t.Errorf("expected %v messages, got=%v\n", messages+reserved, messagesGot)
 	}
 
 	if messagesPerMinGot != -1 {
