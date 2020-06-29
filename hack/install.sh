@@ -29,6 +29,10 @@ echo "Generating Deployment Manifest..."
 export WPA_AWS_REGIONS="${AWS_REGIONS}"
 export WPA_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
 export WPA_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+
+export WPA_TAG=`git describe --tags  --dirty | awk -F'.' '{print $1"."$2}'`
+echo "Image to be used: practodev/${WPA_TAG}"
+
 cp -f $template_deployment $new_deployment
 ./hack/generate.sh ${new_deployment}
 

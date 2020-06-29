@@ -7,8 +7,12 @@ UNIQUE:=$(shell date +%s)
 # Where to push the docker image.
 REGISTRY := practodev
 
+BASE_BRANCH := master
+CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 # This version-strategy uses git tags to set the version string
 VERSION := $(shell git describe --tags --always --dirty)
+MAJOR_MINOR_VERSION = $(shell git describe --tags  --dirty | \
+	awk -F'.' '{print $$1"."$$2}')
 #
 # This version-strategy uses a manual value to set the version string
 #VERSION := 1.2.3
@@ -30,13 +34,22 @@ ARCH := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
 BASEIMAGE ?= gcr.io/distroless/static
 
 IMAGE := $(REGISTRY)/$(BIN)
-TAG := $(VERSION)
-BETA := v1.0-beta
 
-ifneq (,$(findstring v1.0,$(TAG))$(findstring -beta,$(TAG)))
-    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(BETA)
-else
-    PUBLISH_TAGS := $(IMAGE):$(TAG)
+TAG := $(VERSION)
+MAJOR_MINOR_TAG := $(MAJOR_MINOR_VERSION)
+
+PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)
+ifneq (,$(findstring -beta,$(TAG)))
+    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)-beta
+endif
+ifneq (,$(findstring -alpha,$(TAG)))
+    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)-alpha
+endif
+ifneq ($(CURRENT_BRANCH), $(BASE_BRANCH))
+	PUBLISH_TAGS := $(IMAGE):$(TAG)
+endif
+ifneq (,$(findstring -dirty,$(TAG)))
+	PUBLISH_TAGS := $(IMAGE):$(TAG)
 endif
 
 define \n
