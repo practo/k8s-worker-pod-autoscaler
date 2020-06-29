@@ -191,7 +191,7 @@ git fetch --tags
 git tag v1.0.0
 make push
 ```
-Note: If you are on master branch and there is no dirty commit present(local changes). Then, the `make push` will overwrite the major minor  tag everytime. For example, if you are pushing `v1.0.0-beta-70-g47f789d` then `v1.0-beta` will also get overwritten and say if you are pushing `v1.0.0-70-4g7f78d9` then `v1.0` will also get overwritten. It is recommended to use major minor version tag.
+Note: For every tag major and major minor versions tags also available. For example: `v1` and `v1.0`
 
 - Create a Release in Github. Refer [this](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.0.0) and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
 

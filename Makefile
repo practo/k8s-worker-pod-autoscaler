@@ -11,6 +11,8 @@ BASE_BRANCH := master
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 # This version-strategy uses git tags to set the version string
 VERSION := $(shell git describe --tags --always --dirty)
+MAJOR_VERSION = $(shell git describe --tags  --dirty | \
+	awk -F'.' '{print $$1}')
 MAJOR_MINOR_VERSION = $(shell git describe --tags  --dirty | \
 	awk -F'.' '{print $$1"."$$2}')
 #
@@ -36,14 +38,15 @@ BASEIMAGE ?= gcr.io/distroless/static
 IMAGE := $(REGISTRY)/$(BIN)
 
 TAG := $(VERSION)
+MAJOR_TAG := $(MAJOR_VERSION)
 MAJOR_MINOR_TAG := $(MAJOR_MINOR_VERSION)
 
-PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)
+PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION) $(IMAGE):$(MAJOR_VERSION)
 ifneq (,$(findstring -beta,$(TAG)))
-    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)-beta
+    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)-beta $(IMAGE):$(MAJOR_VERSION)-beta
 endif
 ifneq (,$(findstring -alpha,$(TAG)))
-    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)-alpha
+    PUBLISH_TAGS := $(IMAGE):$(TAG) $(IMAGE):$(MAJOR_MINOR_VERSION)-alpha $(IMAGE):$(MAJOR_VERSION)-alpha
 endif
 ifneq ($(CURRENT_BRANCH), $(BASE_BRANCH))
 	PUBLISH_TAGS := $(IMAGE):$(TAG)
