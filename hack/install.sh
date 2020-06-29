@@ -2,6 +2,12 @@
 
 set -e
 
+if [ $# -eq 0 ]; then
+  WPA_TAG=`curl -s https://api.github.com/repos/practo/k8s-worker-pod-autoscaler/releases/latest|python -c "import json;import sys;sys.stdout.write(json.load(sys.stdin)['tag_name']+'\n')"`
+else
+  WPA_TAG=$1
+fi
+
 crd='./artifacts/crd.yaml'
 serviceaccount='./artifacts/serviceaccount.yaml'
 clusterrole='./artifacts/clusterrole.yaml'
@@ -30,7 +36,6 @@ export WPA_AWS_REGIONS="${AWS_REGIONS}"
 export WPA_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
 export WPA_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 
-export WPA_TAG=`git describe --tags  --dirty | awk -F'.' '{print $1"."$2}'`
 echo "Image to be used: practodev/${WPA_TAG}"
 
 cp -f $template_deployment $new_deployment
