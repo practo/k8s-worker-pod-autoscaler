@@ -28,7 +28,7 @@ export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh
 ```
 
-Note: IAM policy required is [this](artifacts/iam-policy.json), and the AWS credential can be passed as `""` if not using SQS.
+Note: IAM policy required is [this](artifacts/iam-policy.json)
 
 ### Verify Installation
 Check the wpa resource is accessible using kubectl

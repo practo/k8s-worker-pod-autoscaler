@@ -15,19 +15,6 @@ clusterrolebinding='./artifacts/clusterrolebinding.yaml'
 new_deployment='./artifacts/deployment.yaml'
 template_deployment='./artifacts/deployment-template.yaml'
 
-if [ -z "${AWS_REGIONS}" ]; then
-    echo "AWS_REGIONS not set in environment, exiting"
-    exit 1
-fi
-if [ -z "${AWS_ACCESS_KEY_ID}" ]; then
-    echo "AWS_ACCESS_KEY_ID not set in environment, exiting"
-    exit 1
-fi
-if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
-    echo "AWS_SECRET_ACCESS_KEY not set in environment, exiting"
-    exit 1
-fi
-
 echo "Creating CRD..."
 kubectl apply -f ${crd}
 
