@@ -37,6 +37,10 @@ Check the wpa resource is accessible using kubectl
 kubectl get wpa
 ```
 
+### Upgrade
+
+Please follow [this document](UPGRADE.md) for upgrading Worker Pod Autoscaler.
+
 # Example
 Do install the wpa crd and wpa deployment before going with the example. (Please check above.)
 
