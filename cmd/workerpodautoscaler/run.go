@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/cmdutil"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/signals"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,7 +23,6 @@ import (
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions"
 	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
 type runCmd struct {
@@ -135,16 +133,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	customClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
 		klog.Fatalf("Error building custom clientset: %s", err.Error())
-	}
-
-	apiExtensionClient, err := apiextensionsclient.NewForConfig(cfg)
-	if err != nil {
-		klog.Fatalf("Error creating api extension client: %s", err.Error())
-	}
-
-	err = v1alpha1.CreateCRD(apiExtensionClient)
-	if err != nil {
-		klog.Fatalf("Error creating crd: %s", err.Error())
 	}
 
 	queues := queue.NewQueues()

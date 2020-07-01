@@ -20,6 +20,8 @@ package fake
 
 import (
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
+	k8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1"
+	fakek8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1/fake"
 	k8sv1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1alpha1"
 	fakek8sv1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,4 +81,9 @@ var _ clientset.Interface = &Clientset{}
 // K8sV1alpha1 retrieves the K8sV1alpha1Client
 func (c *Clientset) K8sV1alpha1() k8sv1alpha1.K8sV1alpha1Interface {
 	return &fakek8sv1alpha1.FakeK8sV1alpha1{Fake: &c.Fake}
+}
+
+// K8sV1 retrieves the K8sV1Client
+func (c *Clientset) K8sV1() k8sv1.K8sV1Interface {
+	return &fakek8sv1.FakeK8sV1{Fake: &c.Fake}
 }

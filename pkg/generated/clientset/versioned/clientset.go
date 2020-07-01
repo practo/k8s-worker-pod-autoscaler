@@ -21,6 +21,7 @@ package versioned
 import (
 	"fmt"
 
+	k8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1"
 	k8sv1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -30,6 +31,7 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	K8sV1alpha1() k8sv1alpha1.K8sV1alpha1Interface
+	K8sV1() k8sv1.K8sV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -37,11 +39,17 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	k8sV1alpha1 *k8sv1alpha1.K8sV1alpha1Client
+	k8sV1       *k8sv1.K8sV1Client
 }
 
 // K8sV1alpha1 retrieves the K8sV1alpha1Client
 func (c *Clientset) K8sV1alpha1() k8sv1alpha1.K8sV1alpha1Interface {
 	return c.k8sV1alpha1
+}
+
+// K8sV1 retrieves the K8sV1Client
+func (c *Clientset) K8sV1() k8sv1.K8sV1Interface {
+	return c.k8sV1
 }
 
 // Discovery retrieves the DiscoveryClient
