@@ -496,7 +496,7 @@ func (c *Controller) getDesiredWorkers(
 		queueName, currentWorkers, idleWorkers)
 	klog.V(3).Infof("%s minComputed=%v, maxDisruptable=%v\n",
 		queueName, minWorkers, maxDisruptableWorkers)
-	klog.V(3).Infof("%s usageRatio=%v \n", usageRatio)
+	klog.V(3).Infof("%s usageRatio=%v \n", queueName, usageRatio)
 
 	if currentWorkers == 0 {
 		desiredWorkers := int32(math.Ceil(usageRatio))
@@ -511,7 +511,9 @@ func (c *Controller) getDesiredWorkers(
 
 	if queueMessages > 0 {
 		// return the current replicas if the change would be too small
-		if (math.Abs(1.0-usageRatio) <= tolerance) || (queueMessages < targetMessagesPerWorker) {
+		if (math.Abs(1.0-usageRatio) <= tolerance) ||
+			(queueMessages < targetMessagesPerWorker &&
+				maxDisruptableWorkers != 0) {
 			// desired is same as current in this scenario
 			return convertDesiredReplicasWithRules(
 				currentWorkers,
