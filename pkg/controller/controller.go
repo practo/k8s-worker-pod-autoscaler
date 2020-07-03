@@ -341,7 +341,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return nil
 	}
 
-	desiredWorkers := c.getDesiredWorkers(
+	desiredWorkers := GetDesiredWorkers(
 		queueName,
 		queueMessages,
 		messagesSentPerMinute,
@@ -353,7 +353,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
-	klog.V(1).Infof("%s: qMsgs: %d, desired: %d",
+	klog.V(1).Infof("%s qMsgs: %d, desired: %d",
 		queueName, queueMessages, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
@@ -454,8 +454,8 @@ func getMinWorkers(
 	return minWorkers
 }
 
-// getDesiredWorkers finds the desired number of workers which are required
-func (c *Controller) getDesiredWorkers(
+// GetDesiredWorkers finds the desired number of workers which are required
+func GetDesiredWorkers(
 	queueName string,
 	queueMessages int32,
 	messagesSentPerMinute float64,
@@ -513,7 +513,7 @@ func (c *Controller) getDesiredWorkers(
 		// return the current replicas if the change would be too small
 		if (math.Abs(1.0-usageRatio) <= tolerance) ||
 			(queueMessages < targetMessagesPerWorker &&
-				maxDisruptableWorkers != 0) {
+				maxDisruptableWorkers == 0) {
 			// desired is same as current in this scenario
 			return convertDesiredReplicasWithRules(
 				currentWorkers,
