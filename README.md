@@ -2,7 +2,7 @@
 
 [![GoDoc Widget]][GoDoc] [![CI Status](https://api.travis-ci.com/practo/k8s-worker-pod-autoscaler.svg?token=yTs54joHywqVVdshXhPm&branch=master)](https://travis-ci.com/practo/k8s-worker-pod-autoscaler)
 
-<img src="/artifacts/images/worker-pod-autoscaler.png" width="120">
+<img src="/artifacts/images/wpa.png" width="120">
 
 ----
 
@@ -152,8 +152,19 @@ wpa_controller_loop_duration_seconds{workerpodautoscaler="example-wpa", namespac
 wpa_log_messages_total{severity="ERROR"} 0
 wpa_log_messages_total{severity="WARNING"} 0
 
+wpa_queue_messages{workerpodautoscaler="example-wpa", namespace="example-namespace", queueName="example-q"} 87
+wpa_queue_messages_sent_per_minute{workerpodautoscaler="example-wpa", namespace="example-namespace", queueName="example-q"} 2007
+
+wpa_worker_current{workerpodautoscaler="example-wpa", namespace="example-namespace", queueName="example-q"} 27
+wpa_worker_desired{workerpodautoscaler="example-wpa", namespace="example-namespace", queueName="example-q"} 5
+wpa_worker_idle{workerpodautoscaler="example-wpa", namespace="example-namespace", queueName="example-q"} 0
+
 go_goroutines{endpoint="workerpodautoscaler-metrics"} 40
 ```
+
+Using these metrics, scaling trends can be better analysed, comparing the Replicas Vs Queue:
+
+<img src="/artifacts/images/wpa-queue-worker-metrics-dashboard.png" width="700" height="280">
 
 If you have [ServiceMonitor](https://github.com/coreos/prometheus-operator/blob/master/Documentation/user-guides/getting-started.md) installed in your cluster. You can bring these metrics to Prometheus by running the following:
 ```
