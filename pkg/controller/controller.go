@@ -76,11 +76,66 @@ var (
 		},
 		[]string{"workerpodautoscaler", "namespace"},
 	)
+
+	qMsgs = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "queue",
+			Name:      "messages",
+			Help:      "Number of unprocessed messages in the queue",
+		},
+		[]string{"workerpodautoscaler", "namespace", "queueName"},
+	)
+
+	qMsgsSPM = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "queue",
+			Name:      "messages_sent_per_minute",
+			Help:      "Number of messages sent to the queue per minute",
+		},
+		[]string{"workerpodautoscaler", "namespace", "queueName"},
+	)
+
+	workersIdle = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "worker",
+			Name:      "idle",
+			Help:      "Number of idle workers",
+		},
+		[]string{"workerpodautoscaler", "namespace", "queueName"},
+	)
+
+	workersCurrent = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "worker",
+			Name:      "current",
+			Help:      "Number of current workers",
+		},
+		[]string{"workerpodautoscaler", "namespace", "queueName"},
+	)
+
+	workersDesired = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "worker",
+			Name:      "desired",
+			Help:      "Number of desired workers",
+		},
+		[]string{"workerpodautoscaler", "namespace", "queueName"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(loopDurationSeconds)
 	prometheus.MustRegister(loopCountSuccess)
+	prometheus.MustRegister(qMsgs)
+	prometheus.MustRegister(qMsgsSPM)
+	prometheus.MustRegister(workersIdle)
+	prometheus.MustRegister(workersCurrent)
+	prometheus.MustRegister(workersDesired)
 }
 
 type WokerPodAutoScalerEvent struct {
@@ -355,6 +410,33 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	)
 	klog.V(1).Infof("%s qMsgs: %d, desired: %d",
 		queueName, queueMessages, desiredWorkers)
+
+	// set metrics
+	qMsgs.WithLabelValues(
+		name,
+		namespace,
+		queueName,
+	).Set(float64(queueMessages))
+	qMsgsSPM.WithLabelValues(
+		name,
+		namespace,
+		queueName,
+	).Set(messagesSentPerMinute)
+	workersIdle.WithLabelValues(
+		name,
+		namespace,
+		queueName,
+	).Set(float64(idleWorkers))
+	workersCurrent.WithLabelValues(
+		name,
+		namespace,
+		queueName,
+	).Set(float64(deployment.Status.AvailableReplicas))
+	workersDesired.WithLabelValues(
+		name,
+		namespace,
+		queueName,
+	).Set(float64(desiredWorkers))
 
 	if desiredWorkers != *deployment.Spec.Replicas {
 		c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
