@@ -511,9 +511,7 @@ func GetDesiredWorkers(
 
 	if queueMessages > 0 {
 		// return the current replicas if the change would be too small
-		if (math.Abs(1.0-usageRatio) <= tolerance) ||
-			(queueMessages < targetMessagesPerWorker &&
-				maxDisruptableWorkers == 0) {
+		if math.Abs(1.0-usageRatio) <= tolerance {
 			// desired is same as current in this scenario
 			return convertDesiredReplicasWithRules(
 				currentWorkers,
