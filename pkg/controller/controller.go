@@ -660,6 +660,10 @@ func convertDesiredReplicasWithRules(
 	max int32,
 	maxDisruptable int32) int32 {
 
+	if min >= max {
+		return max
+	}
+
 	if (current - desired) > maxDisruptable {
 		desired = current - maxDisruptable
 	}
