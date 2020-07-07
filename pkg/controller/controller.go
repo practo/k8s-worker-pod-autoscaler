@@ -341,7 +341,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return nil
 	}
 
-	desiredWorkers := c.getDesiredWorkers(
+	desiredWorkers := GetDesiredWorkers(
 		queueName,
 		queueMessages,
 		messagesSentPerMinute,
@@ -353,7 +353,8 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
-	klog.Infof("%s: messages: %d, idle: %d, desired: %d", queueName, queueMessages, idleWorkers, desiredWorkers)
+	klog.V(1).Infof("%s qMsgs: %d, desired: %d",
+		queueName, queueMessages, desiredWorkers)
 
 	if desiredWorkers != *deployment.Spec.Replicas {
 		c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
@@ -453,9 +454,8 @@ func getMinWorkers(
 	return minWorkers
 }
 
-// getDesiredWorkers finds the desired number of workers which are required
-// test case run: https://play.golang.org/p/_dFbbhb1J_8
-func (c *Controller) getDesiredWorkers(
+// GetDesiredWorkers finds the desired number of workers which are required
+func GetDesiredWorkers(
 	queueName string,
 	queueMessages int32,
 	messagesSentPerMinute float64,
@@ -466,6 +466,9 @@ func (c *Controller) getDesiredWorkers(
 	minWorkers int32,
 	maxWorkers int32,
 	maxDisruption *string) int32 {
+
+	klog.V(4).Infof("%s min=%v, max=%v, targetBacklog=%v \n",
+		queueName, minWorkers, maxWorkers, targetMessagesPerWorker)
 
 	// overwrite the minimum workers needed based on
 	// messagesSentPerMinute and secondsToProcessOneJob
@@ -481,10 +484,20 @@ func (c *Controller) getDesiredWorkers(
 	maxDisruptableWorkers := getMaxDisruptableWorkers(
 		maxDisruption, currentWorkers,
 	)
-	klog.Infof("%s minWorkers=%v, maxDisruptableWorkers=%v\n", queueName, minWorkers, maxDisruptableWorkers)
 
 	tolerance := 0.1
 	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
+
+	klog.V(4).Infof("%s qMsgs=%v, qMsgsPerMin=%v \n",
+		queueName, queueMessages, messagesSentPerMinute)
+	klog.V(4).Infof("%s secToProcessJob=%v, maxDisruption=%v \n",
+		queueName, secondsToProcessOneJob, maxDisruption)
+	klog.V(4).Infof("%s current=%v, idle=%v \n",
+		queueName, currentWorkers, idleWorkers)
+	klog.V(3).Infof("%s minComputed=%v, maxDisruptable=%v\n",
+		queueName, minWorkers, maxDisruptableWorkers)
+	klog.V(3).Infof("%s usageRatio=%v \n", queueName, usageRatio)
+
 	if currentWorkers == 0 {
 		desiredWorkers := int32(math.Ceil(usageRatio))
 		return convertDesiredReplicasWithRules(
@@ -498,7 +511,7 @@ func (c *Controller) getDesiredWorkers(
 
 	if queueMessages > 0 {
 		// return the current replicas if the change would be too small
-		if (math.Abs(1.0-usageRatio) <= tolerance) || (queueMessages < targetMessagesPerWorker) {
+		if math.Abs(1.0-usageRatio) <= tolerance {
 			// desired is same as current in this scenario
 			return convertDesiredReplicasWithRules(
 				currentWorkers,
