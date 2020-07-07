@@ -182,6 +182,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	controller := workerpodautoscalercontroller.NewController(
 		kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
+		kubeInformerFactory.Apps().V1().ReplicaSets(),
 		customInformerFactory.K8s().V1alpha1().WorkerPodAutoScalers(),
 		wpaDefaultMaxDisruption,
 		queues,
