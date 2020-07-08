@@ -3,9 +3,9 @@
 set -e
 
 if [ $# -eq 0 ]; then
-  WPA_TAG=`curl -s https://api.github.com/repos/practo/k8s-worker-pod-autoscaler/releases/latest|python -c "import json;import sys;sys.stdout.write(json.load(sys.stdin)['tag_name']+'\n')"`
+  export WPA_TAG=`curl -s https://api.github.com/repos/practo/k8s-worker-pod-autoscaler/releases/latest|python -c "import json;import sys;sys.stdout.write(json.load(sys.stdin)['tag_name']+'\n')"`
 else
-  WPA_TAG=$1
+  export WPA_TAG=$1
 fi
 
 crd='./artifacts/crd.yaml'
