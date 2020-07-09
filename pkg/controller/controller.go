@@ -444,7 +444,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		name,
 		namespace,
 		queueName,
-	).Set(float64(deployment.Status.AvailableReplicas))
+	).Set(float64(availableWorkers))
 	workersDesired.WithLabelValues(
 		name,
 		namespace,
