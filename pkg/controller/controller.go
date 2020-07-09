@@ -149,8 +149,10 @@ type Controller struct {
 	kubeclientset kubernetes.Interface
 	// customclientset is a clientset for our own API group
 	customclientset            clientset.Interface
-	deploymentsLister          appslisters.DeploymentLister
+	deploymentLister           appslisters.DeploymentLister
 	deploymentsSynced          cache.InformerSynced
+	replicaSetLister           appslisters.ReplicaSetLister
+	replicaSetsSynced          cache.InformerSynced
 	workerPodAutoScalersLister listers.WorkerPodAutoScalerLister
 	workerPodAutoScalersSynced cache.InformerSynced
 	// workqueue is a rate limited work queue. This is used to queue work to be
@@ -178,6 +180,7 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
+	replicaSetInformer appsinformers.ReplicaSetInformer,
 	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
 	defaultMaxDisruption string,
 	queues *queue.Queues) *Controller {
@@ -195,8 +198,10 @@ func NewController(
 	controller := &Controller{
 		kubeclientset:              kubeclientset,
 		customclientset:            customclientset,
-		deploymentsLister:          deploymentInformer.Lister(),
+		deploymentLister:           deploymentInformer.Lister(),
 		deploymentsSynced:          deploymentInformer.Informer().HasSynced,
+		replicaSetLister:           replicaSetInformer.Lister(),
+		replicaSetsSynced:          replicaSetInformer.Informer().HasSynced,
 		workerPodAutoScalersLister: workerPodAutoScalerInformer.Lister(),
 		workerPodAutoScalersSynced: workerPodAutoScalerInformer.Informer().HasSynced,
 		workqueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "WorkerPodAutoScalers"),
@@ -335,30 +340,38 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
+	var workers, availableWorkers int32
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
-	if deploymentName == "" {
+	replicaSetName := workerPodAutoScaler.Spec.ReplicaSetName
+	if deploymentName != "" {
+		// Get the Deployment with the name specified in WorkerPodAutoScaler.spec
+		deployment, err := c.deploymentLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("Deployment %s not found in namespace %s",
+				deploymentName, workerPodAutoScaler.Namespace)
+		} else if err != nil {
+			return err
+		}
+		workers = *deployment.Spec.Replicas
+		availableWorkers = deployment.Status.AvailableReplicas
+	} else if replicaSetName != "" {
+		// Get the ReplicaSet with the name specified in WorkerPodAutoScaler.spec
+		replicaSet, err := c.replicaSetLister.ReplicaSets(workerPodAutoScaler.Namespace).Get(replicaSetName)
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("ReplicaSet %s not found in namespace %s",
+				replicaSetName, workerPodAutoScaler.Namespace)
+		} else if err != nil {
+			return err
+		}
+		workers = *replicaSet.Spec.Replicas
+		availableWorkers = replicaSet.Status.AvailableReplicas
+	} else {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		utilruntime.HandleError(fmt.Errorf("%s: deployment name must be specified", key))
+		utilruntime.HandleError(fmt.Errorf("%s: deployment or replicaset name must be specified", key))
 		return nil
 	}
-
-	// Get the deployment with the name specified in WorkerPodAutoScaler.spec
-	deployment, err := c.deploymentsLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
-	if errors.IsNotFound(err) {
-		return fmt.Errorf("Deployment %s not found in namespace %s",
-			deploymentName, workerPodAutoScaler.Namespace)
-	}
-
-	// If an error occurs during Get/Create, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	if err != nil {
-		return err
-	}
-
-	workers := *deployment.Spec.Replicas
 
 	var secondsToProcessOneJob float64
 	if workerPodAutoScaler.Spec.SecondsToProcessOneJob != nil {
@@ -402,7 +415,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		messagesSentPerMinute,
 		secondsToProcessOneJob,
 		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
-		deployment.Status.AvailableReplicas,
+		availableWorkers,
 		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
@@ -431,15 +444,19 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		name,
 		namespace,
 		queueName,
-	).Set(float64(deployment.Status.AvailableReplicas))
+	).Set(float64(availableWorkers))
 	workersDesired.WithLabelValues(
 		name,
 		namespace,
 		queueName,
 	).Set(float64(desiredWorkers))
 
-	if desiredWorkers != *deployment.Spec.Replicas {
-		c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
+	if desiredWorkers != workers {
+		if deploymentName != "" {
+			c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
+		} else {
+			c.updateReplicaSet(workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
+		}
 	}
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
@@ -450,7 +467,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		c.customclientset,
 		desiredWorkers,
 		workerPodAutoScaler,
-		deployment.Status.AvailableReplicas,
+		availableWorkers,
 		queueMessages,
 	)
 
@@ -468,11 +485,11 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	return nil
 }
 
-// updateDeployment updates the deployment with the desired number of replicas
+// updateDeployment updates the Deployment with the desired number of replicas
 func (c *Controller) updateDeployment(namespace string, deploymentName string, replicas *int32) {
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Retrieve the latest version of Deployment before attempting update
-		deployment, getErr := c.deploymentsLister.Deployments(namespace).Get(deploymentName)
+		// Retrieve the latest version of the Deployment before attempting update
+		deployment, getErr := c.deploymentLister.Deployments(namespace).Get(deploymentName)
 		if errors.IsNotFound(getErr) {
 			return fmt.Errorf("Deployment %s was not found in namespace %s",
 				deploymentName, namespace)
@@ -490,6 +507,31 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 	})
 	if retryErr != nil {
 		klog.Fatalf("Failed to update deployment (retry failed): %v", retryErr)
+	}
+}
+
+// updateReplicaSet updates the ReplicaSet with the desired number of replicas
+func (c *Controller) updateReplicaSet(namespace string, replicaSetName string, replicas *int32) {
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Retrieve the latest version of the ReplicaSet before attempting update
+		replicaSet, getErr := c.replicaSetLister.ReplicaSets(namespace).Get(replicaSetName)
+		if errors.IsNotFound(getErr) {
+			return fmt.Errorf("ReplicaSet %s was not found in namespace %s",
+				replicaSetName, namespace)
+		}
+		if getErr != nil {
+			klog.Fatalf("Failed to get ReplicaSet: %v", getErr)
+		}
+
+		replicaSet.Spec.Replicas = replicas
+		replicaSet, updateErr := c.kubeclientset.AppsV1().ReplicaSets(namespace).Update(replicaSet)
+		if updateErr != nil {
+			klog.Errorf("Failed to update ReplicaSet: %v", updateErr)
+		}
+		return updateErr
+	})
+	if retryErr != nil {
+		klog.Fatalf("Failed to update ReplicaSet (retry failed): %v", retryErr)
 	}
 }
 

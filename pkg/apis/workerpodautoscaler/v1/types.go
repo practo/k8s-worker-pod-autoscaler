@@ -23,6 +23,7 @@ type WorkerPodAutoScalerSpec struct {
 	MaxDisruption           *string  `json:"maxDisruption"`
 	QueueURI                string   `json:"queueURI"`
 	DeploymentName          string   `json:"deploymentName"`
+	ReplicaSetName          string   `json:"replicaSetName"`
 	TargetMessagesPerWorker *int32   `json:"targetMessagesPerWorker"`
 	SecondsToProcessOneJob  *float64 `json:"secondsToProcessOneJob"`
 }

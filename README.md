@@ -81,11 +81,14 @@ Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tub
 | :------------ | :----------- |:------------|
 | minReplicas    | Minimum number of workers you want to run.                                | Yes |
 | maxReplicas    | Maximum number of workers you want to run                                 | Yes |
-| deploymentName | Name of the kubernetes deployment in the same namespace as WPA object. | Yes |
+| deploymentName | Name of the kubernetes Deployment in the same namespace as WPA object. | No* |
+| replicaSetName | Name of the kubernetes ReplicaSet in the same namespace as WPA object. | No* |
 | queueURI       | Full URL of the queue.                                                 | Yes |
 | targetMessagesPerWorker |  Number of jobs in the queue which have not been picked up by the workers. This is also used to calculate the desired number of workers. | Yes |
 | secondsToProcessOneJob | This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds. (highly recommended, default=0.0 i.e. disabled). | No |
 | maxDisruption | Amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity. Using this you can control how fast a scale down can happen. This can be expressed both as an absolute value and a percentage. (default is the WPA flag `--wpa-default-max-disruption`). | No |
+
+*It is mandatory to set either `deploymentName` or `replicaSetName`.
 
 `maxDisruption` explained with the help of some examples:
 ```
