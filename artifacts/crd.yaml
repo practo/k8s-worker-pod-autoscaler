@@ -16,7 +16,6 @@ spec:
     singular: workerpodautoscaler
   preserveUnknownFields: true
   scope: Namespaced
-  versions: v1
   versions:
   - name: v1
     served: true
@@ -36,7 +35,6 @@ spec:
           spec:
             type: object
             required:
-            - deploymentName
             - minReplicas
             - maxReplicas
             - queueURI
@@ -44,7 +42,10 @@ spec:
             properties:
               deploymentName:
                 type: string
-                description: 'Name of the kubernetes deployment in the same namespace as WPA object'
+                description: 'Name of the Kubernetes Deployment in the same namespace as WPA object'
+              replicaSetName:
+                type: string
+                description: 'Name of the Kubernetes ReplicaSet in the same namespace as WPA object'
               maxDisruption:
                 type: string
                 nullable: true
