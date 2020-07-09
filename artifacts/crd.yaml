@@ -39,6 +39,11 @@ spec:
             - maxReplicas
             - queueURI
             - targetMessagesPerWorker
+            oneOf:
+            - required:
+              - deploymentName
+            - required:
+              - replicaSetName
             properties:
               deploymentName:
                 type: string
