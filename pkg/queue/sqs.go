@@ -5,6 +5,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/practo/klog/v2"
@@ -33,7 +34,7 @@ type SQS struct {
 	cacheSentMessagesValidity      time.Duration
 	cacheSentMessagesListCh        chan chan map[string]float64
 	cacheSentMessagesUpdateCh      chan map[string]float64
-	cacheSentMessageslastTimestamp int64
+	cacheSentMessageslastTimestamp *sync.Map
 
 	// cache the numberOfReceiveMessages as it is refreshed
 	// in aws every 1minute - prevent un-necessary api calls
@@ -41,7 +42,7 @@ type SQS struct {
 	cacheReceiveMessagesValidity      time.Duration
 	cacheReceiveMessagesListCh        chan chan map[string]float64
 	cacheReceiveMessagesUpdateCh      chan map[string]float64
-	cacheReceiveMessageslastTimestamp int64
+	cacheReceiveMessageslastTimestamp *sync.Map
 }
 
 func NewSQS(
@@ -76,15 +77,17 @@ func NewSQS(
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
 
-		cacheSentMessages:         make(map[string]float64),
-		cacheSentMessagesValidity: time.Second * time.Duration(60),
-		cacheSentMessagesListCh:   make(chan chan map[string]float64),
-		cacheSentMessagesUpdateCh: make(chan map[string]float64),
+		cacheSentMessages:              make(map[string]float64),
+		cacheSentMessagesValidity:      time.Second * time.Duration(60),
+		cacheSentMessagesListCh:        make(chan chan map[string]float64),
+		cacheSentMessagesUpdateCh:      make(chan map[string]float64),
+		cacheSentMessageslastTimestamp: new(sync.Map),
 
-		cacheReceiveMessages:         make(map[string]float64),
-		cacheReceiveMessagesValidity: time.Second * time.Duration(60),
-		cacheReceiveMessagesListCh:   make(chan chan map[string]float64),
-		cacheReceiveMessagesUpdateCh: make(chan map[string]float64),
+		cacheReceiveMessages:              make(map[string]float64),
+		cacheReceiveMessagesValidity:      time.Second * time.Duration(60),
+		cacheReceiveMessagesListCh:        make(chan chan map[string]float64),
+		cacheReceiveMessagesUpdateCh:      make(chan map[string]float64),
+		cacheReceiveMessageslastTimestamp: new(sync.Map),
 	}, nil
 }
 
@@ -240,8 +243,14 @@ func (s *SQS) updateSentMessageCache(key string, cache float64) {
 }
 
 func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
+	lastTimeStamp, _ := s.cacheSentMessageslastTimestamp.Load(queueURI)
+	if lastTimeStamp == nil {
+		lastTimeStamp = time.Now().UnixNano() -
+			(time.Second * time.Duration(70)).Nanoseconds()
+	}
+
 	now := time.Now().UnixNano()
-	if (s.cacheSentMessageslastTimestamp + s.cacheSentMessagesValidity.Nanoseconds()) > now {
+	if (lastTimeStamp.(int64) + s.cacheSentMessagesValidity.Nanoseconds()) > now {
 		cache, cacheHit := s.getSentMessageCache(queueURI)
 		if cacheHit {
 			return cache, nil
@@ -253,7 +262,7 @@ func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
 		return messagesSent, err
 	}
 	s.updateSentMessageCache(queueURI, messagesSent)
-	s.cacheSentMessageslastTimestamp = now
+	s.cacheSentMessageslastTimestamp.Store(queueURI, now)
 	return messagesSent, nil
 }
 
@@ -278,8 +287,14 @@ func (s *SQS) updateReceiveMessageCache(key string, cache float64) {
 }
 
 func (s *SQS) cachedNumberOfReceiveMessages(queueURI string) (float64, error) {
+	lastTimeStamp, _ := s.cacheReceiveMessageslastTimestamp.Load(queueURI)
+	if lastTimeStamp == nil {
+		lastTimeStamp = time.Now().UnixNano() -
+			(time.Second * time.Duration(70)).Nanoseconds()
+	}
+
 	now := time.Now().UnixNano()
-	if (s.cacheReceiveMessageslastTimestamp + s.cacheReceiveMessagesValidity.Nanoseconds()) > now {
+	if (lastTimeStamp.(int64) + s.cacheReceiveMessagesValidity.Nanoseconds()) > now {
 		cache, cacheHit := s.getReceiveMessageCache(queueURI)
 		if cacheHit {
 			return cache, nil
@@ -291,7 +306,7 @@ func (s *SQS) cachedNumberOfReceiveMessages(queueURI string) (float64, error) {
 		return messagesReceived, err
 	}
 	s.updateReceiveMessageCache(queueURI, messagesReceived)
-	s.cacheReceiveMessageslastTimestamp = now
+	s.cacheReceiveMessageslastTimestamp.Store(queueURI, now)
 	return messagesReceived, nil
 }
 
