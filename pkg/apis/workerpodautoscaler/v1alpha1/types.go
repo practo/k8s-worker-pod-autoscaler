@@ -30,9 +30,11 @@ type WorkerPodAutoScalerSpec struct {
 
 // WorkerPodAutoScalerStatus is the status for a WorkerPodAutoScaler resource
 type WorkerPodAutoScalerStatus struct {
-	CurrentMessages int32 `json:"CurrentMessages"`
-	CurrentReplicas int32 `json:"CurrentReplicas"`
-	DesiredReplicas int32 `json:"DesiredReplicas"`
+	CurrentMessages   int32        `json:"CurrentMessages"`
+	CurrentReplicas   int32        `json:"CurrentReplicas"`
+	DesiredReplicas   int32        `json:"DesiredReplicas"`
+	LastScaleUpTime   *metav1.Time `json:"LastScaleUpTime"`
+	LastScaleDownTime *metav1.Time `json:"LastScaleDownTime"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

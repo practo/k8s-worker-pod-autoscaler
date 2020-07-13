@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -315,9 +316,24 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
+func getMaxReadinessDelaySeconds(containers []corev1.Container) int32 {
+	max := int32(0)
+	for _, container := range containers {
+		if container.ReadinessProbe == nil {
+			continue
+		}
+
+		if container.ReadinessProbe.InitialDelaySeconds > max {
+			max = container.ReadinessProbe.InitialDelaySeconds
+		}
+	}
+
+	return max
+}
+
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
-// with the current status of the resource.
+// converge the two. It then updates the Status block of the
+// WorkerPodAutoScaler resource with the current status of the resource.
 func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	now := time.Now()
 	key := event.key
@@ -329,23 +345,29 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	}
 
 	// Get the WorkerPodAutoScaler resource with this namespace/name
-	workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalers(namespace).Get(name)
+	workerPodAutoScaler, err := c.
+		workerPodAutoScalersLister.
+		WorkerPodAutoScalers(namespace).
+		Get(name)
 	if err != nil {
-		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
+		// The WorkerPodAutoScaler resource
+		// may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
+			utilruntime.HandleError(
+				fmt.Errorf(
+					"workerPodAutoScaler '%s' no longer exists", key))
 			c.Queues.Delete(namespace, name)
 			return nil
 		}
 		return err
 	}
 
-	var workers, availableWorkers int32
+	var workers, availableWorkers, readinessDelaySeconds int32
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
 	replicaSetName := workerPodAutoScaler.Spec.ReplicaSetName
 	if deploymentName != "" {
-		// Get the Deployment with the name specified in WorkerPodAutoScaler.spec
-		deployment, err := c.deploymentLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
+		deployment, err := c.deploymentLister.Deployments(
+			workerPodAutoScaler.Namespace).Get(deploymentName)
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("Deployment %s not found in namespace %s",
 				deploymentName, workerPodAutoScaler.Namespace)
@@ -354,9 +376,12 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		}
 		workers = *deployment.Spec.Replicas
 		availableWorkers = deployment.Status.AvailableReplicas
+		readinessDelaySeconds = getMaxReadinessDelaySeconds(
+			deployment.Spec.Template.Spec.Containers)
+
 	} else if replicaSetName != "" {
-		// Get the ReplicaSet with the name specified in WorkerPodAutoScaler.spec
-		replicaSet, err := c.replicaSetLister.ReplicaSets(workerPodAutoScaler.Namespace).Get(replicaSetName)
+		replicaSet, err := c.replicaSetLister.ReplicaSets(
+			workerPodAutoScaler.Namespace).Get(replicaSetName)
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("ReplicaSet %s not found in namespace %s",
 				replicaSetName, workerPodAutoScaler.Namespace)
@@ -365,17 +390,23 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		}
 		workers = *replicaSet.Spec.Replicas
 		availableWorkers = replicaSet.Status.AvailableReplicas
+		readinessDelaySeconds = getMaxReadinessDelaySeconds(
+			replicaSet.Spec.Template.Spec.Containers)
 	} else {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
 		// the resource will be queued again.
-		utilruntime.HandleError(fmt.Errorf("%s: deployment or replicaset name must be specified", key))
+		utilruntime.HandleError(
+			fmt.Errorf(
+				"%s: deployment or replicaset name must be specified", key))
 		return nil
 	}
 
 	var secondsToProcessOneJob float64
 	if workerPodAutoScaler.Spec.SecondsToProcessOneJob != nil {
-		secondsToProcessOneJob = *workerPodAutoScaler.Spec.SecondsToProcessOneJob
+		secondsToProcessOneJob = *workerPodAutoScaler.
+			Spec.
+			SecondsToProcessOneJob
 	}
 
 	switch event.name {
@@ -399,7 +430,8 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		err = c.Queues.Delete(namespace, name)
 	}
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
+		utilruntime.HandleError(
+			fmt.Errorf("unable to sync queue: %s", err.Error()))
 		return err
 	}
 
@@ -408,6 +440,8 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	if queueName == "" {
 		return nil
 	}
+	lastScaleUpTime := workerPodAutoScaler.Status.LastScaleUpTime
+	lastScaleDownTime := workerPodAutoScaler.Status.LastScaleDownTime
 
 	desiredWorkers := GetDesiredWorkers(
 		queueName,
@@ -420,6 +454,8 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
+		readinessDelaySeconds,
+		lastScaleUpTime,
 	)
 	klog.V(1).Infof("%s qMsgs: %d, desired: %d",
 		queueName, queueMessages, desiredWorkers)
@@ -453,13 +489,22 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	if desiredWorkers != workers {
 		if deploymentName != "" {
-			c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
+			c.updateDeployment(
+				workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
 		} else {
-			c.updateReplicaSet(workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
+			c.updateReplicaSet(
+				workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
+		}
+
+		if desiredWorkers > workers {
+			lastScaleUpTime = &metav1.Time{Time: time.Now()}
+		} else {
+			lastScaleDownTime = &metav1.Time{Time: time.Now()}
 		}
 	}
 
-	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
+	// Finally, we update the status block of the WorkerPodAutoScaler
+	// resource to reflect the
 	// current state of the world
 	updateWorkerPodAutoScalerStatus(
 		name,
@@ -469,6 +514,8 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		workerPodAutoScaler,
 		availableWorkers,
 		queueMessages,
+		lastScaleUpTime,
+		lastScaleDownTime,
 	)
 
 	loopDurationSeconds.WithLabelValues(
@@ -481,15 +528,20 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 	).Inc()
 
 	// TODO: organize and log events
-	// c.recorder.Event(workerPodAutoScaler, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
+	// c.recorder.Event(workerPodAutoScaler,
+	// corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
 // updateDeployment updates the Deployment with the desired number of replicas
-func (c *Controller) updateDeployment(namespace string, deploymentName string, replicas *int32) {
+func (c *Controller) updateDeployment(
+	namespace string, deploymentName string, replicas *int32) {
+
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Retrieve the latest version of the Deployment before attempting update
-		deployment, getErr := c.deploymentLister.Deployments(namespace).Get(deploymentName)
+		// Retrieve the latest version of the Deployment
+		// before attempting update
+		deployment, getErr := c.deploymentLister.Deployments(namespace).Get(
+			deploymentName)
 		if errors.IsNotFound(getErr) {
 			return fmt.Errorf("Deployment %s was not found in namespace %s",
 				deploymentName, namespace)
@@ -499,7 +551,8 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 		}
 
 		deployment.Spec.Replicas = replicas
-		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(deployment)
+		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(
+			namespace).Update(deployment)
 		if updateErr != nil {
 			klog.Errorf("Failed to update deployment: %v", updateErr)
 		}
@@ -511,10 +564,14 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 }
 
 // updateReplicaSet updates the ReplicaSet with the desired number of replicas
-func (c *Controller) updateReplicaSet(namespace string, replicaSetName string, replicas *int32) {
+func (c *Controller) updateReplicaSet(
+	namespace string, replicaSetName string, replicas *int32) {
+
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Retrieve the latest version of the ReplicaSet before attempting update
-		replicaSet, getErr := c.replicaSetLister.ReplicaSets(namespace).Get(replicaSetName)
+		// Retrieve the latest version of the ReplicaSet
+		// before attempting update
+		replicaSet, getErr := c.replicaSetLister.ReplicaSets(namespace).Get(
+			replicaSetName)
 		if errors.IsNotFound(getErr) {
 			return fmt.Errorf("ReplicaSet %s was not found in namespace %s",
 				replicaSetName, namespace)
@@ -524,7 +581,8 @@ func (c *Controller) updateReplicaSet(namespace string, replicaSetName string, r
 		}
 
 		replicaSet.Spec.Replicas = replicas
-		replicaSet, updateErr := c.kubeclientset.AppsV1().ReplicaSets(namespace).Update(replicaSet)
+		replicaSet, updateErr := c.kubeclientset.AppsV1().ReplicaSets(
+			namespace).Update(replicaSet)
 		if updateErr != nil {
 			klog.Errorf("Failed to update ReplicaSet: %v", updateErr)
 		}
@@ -570,15 +628,38 @@ func getMinWorkers(
 		return minWorkers
 	}
 
-	workersBasedOnMessagesSent := int32(math.Ceil((secondsToProcessOneJob * messagesSentPerMinute) / 60))
-	//klog.Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
+	workersBasedOnMessagesSent := int32(
+		math.Ceil((secondsToProcessOneJob * messagesSentPerMinute) / 60))
 	if workersBasedOnMessagesSent > minWorkers {
 		return workersBasedOnMessagesSent
 	}
 	return minWorkers
 }
 
+// readinessDelayActive checks if the readinessDelaySeconds
+// is still active, i.e. lastScaleUpTime + readinessDelaySeconds > now
+func readinessDelayActive(
+	lastScaleUpTime *metav1.Time, readinessDelaySeconds int32) bool {
+
+	if lastScaleUpTime == nil || readinessDelaySeconds == int32(0) {
+		return false
+	}
+
+	expiry := &metav1.Time{
+		Time: lastScaleUpTime.Add(
+			time.Second * time.Duration(readinessDelaySeconds),
+		),
+	}
+	now := &metav1.Time{Time: time.Now()}
+	if now.Before(expiry) {
+		return true
+	}
+
+	return false
+}
+
 // GetDesiredWorkers finds the desired number of workers which are required
+// TODO: refactor to reduce the number of parameters passed to this func
 func GetDesiredWorkers(
 	queueName string,
 	queueMessages int32,
@@ -589,10 +670,23 @@ func GetDesiredWorkers(
 	idleWorkers int32,
 	minWorkers int32,
 	maxWorkers int32,
-	maxDisruption *string) int32 {
+	maxDisruption *string,
+	readinessDelaySeconds int32,
+	lastScaleUpTime *metav1.Time) int32 {
 
 	klog.V(4).Infof("%s min=%v, max=%v, targetBacklog=%v \n",
 		queueName, minWorkers, maxWorkers, targetMessagesPerWorker)
+
+	preventScaleUp := false
+	if readinessDelayActive(lastScaleUpTime, readinessDelaySeconds) {
+		klog.Infof(
+			"%s scale up won't be considered, delay=%vs, lastScaleUpTime=%v\n",
+			queueName,
+			readinessDelaySeconds,
+			lastScaleUpTime.Format(time.RFC3339),
+		)
+		preventScaleUp = true
+	}
 
 	// overwrite the minimum workers needed based on
 	// messagesSentPerMinute and secondsToProcessOneJob
@@ -630,6 +724,7 @@ func GetDesiredWorkers(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
+			preventScaleUp,
 		)
 	}
 
@@ -643,6 +738,7 @@ func GetDesiredWorkers(
 				minWorkers,
 				maxWorkers,
 				maxDisruptableWorkers,
+				preventScaleUp,
 			)
 		}
 
@@ -653,6 +749,7 @@ func GetDesiredWorkers(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
+			preventScaleUp,
 		)
 	} else if messagesSentPerMinute > 0 && secondsToProcessOneJob > 0.0 {
 		// this is the case in which there is no backlog visible.
@@ -667,6 +764,7 @@ func GetDesiredWorkers(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
+			preventScaleUp,
 		)
 	}
 
@@ -681,6 +779,7 @@ func GetDesiredWorkers(
 			minWorkers,
 			maxWorkers,
 			currentWorkers,
+			preventScaleUp,
 		)
 	}
 
@@ -692,10 +791,11 @@ func GetDesiredWorkers(
 		minWorkers,
 		maxWorkers,
 		maxDisruptableWorkers,
+		preventScaleUp,
 	)
 }
 
-func convertDesiredReplicasWithRules(
+func applyDefaultRules(
 	current int32,
 	desired int32,
 	min int32,
@@ -719,6 +819,22 @@ func convertDesiredReplicasWithRules(
 	return desired
 }
 
+func convertDesiredReplicasWithRules(
+	current int32,
+	desired int32,
+	min int32,
+	max int32,
+	maxDisruptable int32,
+	preventScaleUp bool) int32 {
+
+	desired = applyDefaultRules(current, desired, min, max, maxDisruptable)
+	if desired > current && preventScaleUp {
+		return current
+	}
+
+	return desired
+}
+
 func updateWorkerPodAutoScalerStatus(
 	name string,
 	namespace string,
@@ -726,11 +842,15 @@ func updateWorkerPodAutoScalerStatus(
 	desiredWorkers int32,
 	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
 	availableReplicas int32,
-	queueMessages int32) {
+	queueMessages int32,
+	lastScaleUpTime *metav1.Time,
+	lastScaleDownTime *metav1.Time) {
 
 	if workerPodAutoScaler.Status.CurrentReplicas == availableReplicas &&
 		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
-		workerPodAutoScaler.Status.CurrentMessages == queueMessages {
+		workerPodAutoScaler.Status.CurrentMessages == queueMessages &&
+		*workerPodAutoScaler.Status.LastScaleUpTime == *lastScaleUpTime &&
+		*workerPodAutoScaler.Status.LastScaleDownTime == *lastScaleDownTime {
 		klog.Infof("%s/%s: WPA status is already up to date\n", namespace, name)
 		return
 	} else {
@@ -738,17 +858,22 @@ func updateWorkerPodAutoScalerStatus(
 	}
 
 	// NEVER modify objects from the store. It's a read-only, local cache.
-	// You can use DeepCopy() to make a deep copy of original object and modify this copy
-	// Or create a copy manually for better performance
+	// You can use DeepCopy() to make a deep copy of original object and
+	// modify this copy Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
 	workerPodAutoScalerCopy.Status.CurrentReplicas = availableReplicas
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
+	workerPodAutoScalerCopy.Status.LastScaleUpTime = lastScaleUpTime
+	workerPodAutoScalerCopy.Status.LastScaleDownTime = lastScaleDownTime
 	// If the CustomResourceSubresources feature gate is not enabled,
-	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
+	// we must use Update instead of UpdateStatus to update the Status
+	// block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
-	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := customclientset.K8sV1alpha1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
+	// which is ideal for ensuring nothing other than
+	// resource status has been updated.
+	_, err := customclientset.K8sV1alpha1().WorkerPodAutoScalers(
+		workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
 	if err != nil {
 		klog.Errorf("Error updating wpa status, err: %v", err)
 		return
@@ -757,9 +882,10 @@ func updateWorkerPodAutoScalerStatus(
 	return
 }
 
-// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
-// string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than WorkerPodAutoScaler.
+// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and
+// converts it into a namespace/name string which is then put
+// onto the work queue. This method should *not* be passed resources of any
+// type other than WorkerPodAutoScaler.
 func (c *Controller) getKeyForWorkerPodAutoScaler(obj interface{}) string {
 	var key string
 	var err error
