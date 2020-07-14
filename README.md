@@ -28,7 +28,7 @@ export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh
 ```
 
-Note: IAM policy required is [this](artifacts/iam-policy.json)
+Note: `AWS_` variables needs to exported only when using SQS and the node role in which the WPA pod runs do not have the [required IAM Policy](artifacts/iam-policy.json).
 
 ### Verify Installation
 Check the wpa resource is accessible using kubectl
