@@ -42,7 +42,8 @@ func (c *desiredWorkerTester) test(t *testing.T, expected int32) {
 }
 
 // TestScaleDownWhenQueueMessagesLessThanTarget tests scale down
-//  when unprocessed messages is less than targetMessagesPerWorker #89
+// when unprocessed messages is less than targetMessagesPerWorker
+// #89
 func TestScaleDownWhenQueueMessagesLessThanTarget(t *testing.T) {
 	c := desiredWorkerTester{
 		queueName:               "q",
@@ -62,6 +63,7 @@ func TestScaleDownWhenQueueMessagesLessThanTarget(t *testing.T) {
 
 // TestScaleUpWhenCalculatedMinIsGreaterThanMax
 // when calculated min is greater than max
+// #70
 func TestScaleUpWhenCalculatedMinIsGreaterThanMax(t *testing.T) {
 	c := desiredWorkerTester{
 		queueName:               "q",
@@ -77,4 +79,40 @@ func TestScaleUpWhenCalculatedMinIsGreaterThanMax(t *testing.T) {
 	}
 
 	c.test(t, 20)
+}
+
+// TestScaleForLongRunningWorkersTakingMinutesToProcess
+// when the workers runs for longer duration of time and takes many minutes
+// to process the messages
+// #101
+func TestScaleForLongRunningWorkersTakingMinutesToProcess(t *testing.T) {
+	c := desiredWorkerTester{
+		queueName:               "q",
+		queueMessages:           100,
+		targetMessagesPerWorker: 10,
+		currentWorkers:          0,
+		idleWorkers:             0,
+		minWorkers:              0,
+		maxWorkers:              500,
+		maxDisruption:           "0%", // partial scale down is not allowed
+	}
+
+	// first loop should returns 10 desired workers
+	c.test(t, 10)
+
+	// many loops till the queueMessages does not drop should return
+	// the same number of desired workers, 10
+	// queueMessages = backlog(or visible) + reserved(or not visible)
+	c.currentWorkers = 10
+	c.test(t, 10)
+
+	// third loop, say backlog reduced since some messages got consumed
+	// it will still return 10 workers since max Disruption is not set
+	c.queueMessages = 50
+	c.test(t, 10)
+
+	// fourth loop, say you enabled max disruption, so
+	// now it should scale down to half the workers
+	c.maxDisruption = "100%"
+	c.test(t, 5)
 }
