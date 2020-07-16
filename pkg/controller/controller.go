@@ -126,6 +126,16 @@ var (
 		},
 		[]string{"workerpodautoscaler", "namespace", "queueName"},
 	)
+
+	workersAvailable = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "wpa",
+			Subsystem: "worker",
+			Name:      "available",
+			Help:      "Number of available workers",
+		},
+		[]string{"workerpodautoscaler", "namespace", "queueName"},
+	)
 )
 
 func init() {
@@ -136,6 +146,7 @@ func init() {
 	prometheus.MustRegister(workersIdle)
 	prometheus.MustRegister(workersCurrent)
 	prometheus.MustRegister(workersDesired)
+	prometheus.MustRegister(workersAvailable)
 }
 
 type WokerPodAutoScalerEvent struct {
@@ -340,7 +351,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		return err
 	}
 
-	var workers, availableWorkers int32
+	var currentWorkers, availableWorkers int32
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
 	replicaSetName := workerPodAutoScaler.Spec.ReplicaSetName
 	if deploymentName != "" {
@@ -352,7 +363,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		} else if err != nil {
 			return err
 		}
-		workers = *deployment.Spec.Replicas
+		currentWorkers = *deployment.Spec.Replicas
 		availableWorkers = deployment.Status.AvailableReplicas
 	} else if replicaSetName != "" {
 		// Get the ReplicaSet with the name specified in WorkerPodAutoScaler.spec
@@ -363,7 +374,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		} else if err != nil {
 			return err
 		}
-		workers = *replicaSet.Spec.Replicas
+		currentWorkers = *replicaSet.Spec.Replicas
 		availableWorkers = replicaSet.Status.AvailableReplicas
 	} else {
 		// We choose to absorb the error here as the worker would requeue the
@@ -384,7 +395,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 			namespace,
 			name,
 			workerPodAutoScaler.Spec.QueueURI,
-			workers,
+			currentWorkers,
 			secondsToProcessOneJob,
 		)
 	case WokerPodAutoScalerEventUpdate:
@@ -392,7 +403,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 			namespace,
 			name,
 			workerPodAutoScaler.Spec.QueueURI,
-			workers,
+			currentWorkers,
 			secondsToProcessOneJob,
 		)
 	case WokerPodAutoScalerEventDelete:
@@ -415,7 +426,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		messagesSentPerMinute,
 		secondsToProcessOneJob,
 		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
-		availableWorkers,
+		currentWorkers,
 		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
@@ -444,14 +455,19 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		name,
 		namespace,
 		queueName,
-	).Set(float64(availableWorkers))
+	).Set(float64(currentWorkers))
 	workersDesired.WithLabelValues(
 		name,
 		namespace,
 		queueName,
 	).Set(float64(desiredWorkers))
+	workersAvailable.WithLabelValues(
+		name,
+		namespace,
+		queueName,
+	).Set(float64(availableWorkers))
 
-	if desiredWorkers != workers {
+	if desiredWorkers != currentWorkers {
 		if deploymentName != "" {
 			c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
 		} else {
@@ -467,6 +483,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		c.customclientset,
 		desiredWorkers,
 		workerPodAutoScaler,
+		currentWorkers,
 		availableWorkers,
 		queueMessages,
 	)
@@ -725,10 +742,12 @@ func updateWorkerPodAutoScalerStatus(
 	customclientset clientset.Interface,
 	desiredWorkers int32,
 	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
-	availableReplicas int32,
+	currentWorkers int32,
+	availableWorkers int32,
 	queueMessages int32) {
 
-	if workerPodAutoScaler.Status.CurrentReplicas == availableReplicas &&
+	if workerPodAutoScaler.Status.CurrentReplicas == currentWorkers &&
+		workerPodAutoScaler.Status.AvailableReplicas == availableWorkers &&
 		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
 		workerPodAutoScaler.Status.CurrentMessages == queueMessages {
 		klog.Infof("%s/%s: WPA status is already up to date\n", namespace, name)
@@ -741,7 +760,8 @@ func updateWorkerPodAutoScalerStatus(
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
-	workerPodAutoScalerCopy.Status.CurrentReplicas = availableReplicas
+	workerPodAutoScalerCopy.Status.CurrentReplicas = currentWorkers
+	workerPodAutoScalerCopy.Status.AvailableReplicas = availableWorkers
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
 	// If the CustomResourceSubresources feature gate is not enabled,
