@@ -596,7 +596,7 @@ func getMinWorkers(
 }
 
 func isChangeTooSmall(desired int32, current int32, tolerance float64) bool {
-	if math.Abs(float64((desired-current)/current)) <= tolerance {
+	if math.Abs(float64(desired-current))/float64(current) <= tolerance {
 		return true
 	}
 
