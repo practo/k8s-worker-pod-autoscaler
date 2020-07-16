@@ -595,6 +595,14 @@ func getMinWorkers(
 	return minWorkers
 }
 
+func isChangeTooSmall(desired int32, current int32, tolerance float64) bool {
+	if math.Abs(float64((desired-current)/current)) <= tolerance {
+		return true
+	}
+
+	return false
+}
+
 // GetDesiredWorkers finds the desired number of workers which are required
 func GetDesiredWorkers(
 	queueName string,
@@ -627,7 +635,9 @@ func GetDesiredWorkers(
 	)
 
 	tolerance := 0.1
-	usageRatio := float64(queueMessages) / float64(targetMessagesPerWorker)
+	desiredWorkers := int32(math.Ceil(
+		float64(queueMessages) / float64(targetMessagesPerWorker)),
+	)
 
 	klog.V(4).Infof("%s qMsgs=%v, qMsgsPerMin=%v \n",
 		queueName, queueMessages, messagesSentPerMinute)
@@ -637,10 +647,8 @@ func GetDesiredWorkers(
 		queueName, currentWorkers, idleWorkers)
 	klog.V(3).Infof("%s minComputed=%v, maxDisruptable=%v\n",
 		queueName, minWorkers, maxDisruptableWorkers)
-	klog.V(3).Infof("%s usageRatio=%v \n", queueName, usageRatio)
 
 	if currentWorkers == 0 {
-		desiredWorkers := int32(math.Ceil(usageRatio))
 		return convertDesiredReplicasWithRules(
 			currentWorkers,
 			desiredWorkers,
@@ -651,8 +659,7 @@ func GetDesiredWorkers(
 	}
 
 	if queueMessages > 0 {
-		// return the current replicas if the change would be too small
-		if math.Abs(1.0-usageRatio) <= tolerance {
+		if isChangeTooSmall(desiredWorkers, currentWorkers, tolerance) {
 			// desired is same as current in this scenario
 			return convertDesiredReplicasWithRules(
 				currentWorkers,
@@ -663,7 +670,6 @@ func GetDesiredWorkers(
 			)
 		}
 
-		desiredWorkers := int32(math.Ceil(usageRatio * float64(currentWorkers)))
 		return convertDesiredReplicasWithRules(
 			currentWorkers,
 			desiredWorkers,
