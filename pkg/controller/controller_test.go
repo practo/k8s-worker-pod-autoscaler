@@ -116,3 +116,45 @@ func TestScaleForLongRunningWorkersTakingMinutesToProcess(t *testing.T) {
 	c.maxDisruption = "100%"
 	c.test(t, 5)
 }
+
+// TestTargetScalingForLongRunningWorkers
+// The test cases show secondsToProcessOneJob becomes ineffective
+// and the need of having targetMessagesPerWorker
+// #97
+func TestTargetScalingForLongRunningWorkers(t *testing.T) {
+	c := desiredWorkerTester{
+		queueName:               "q",
+		queueMessages:           20,
+		messagesSentPerMinute:   float64(0),   // rpm averaged over 10mins
+		secondsToProcessOneJob:  float64(300), // lot of time to process
+		targetMessagesPerWorker: 10,
+		currentWorkers:          0,
+		idleWorkers:             0,
+		minWorkers:              0,
+		maxWorkers:              100,
+		maxDisruption:           "100%",
+	}
+
+	c.test(t, 2)
+}
+
+// TestRPMScalingForFastRunningWorkers
+// targetMessagesPerWorker becomes ineffective
+// and the need of having secondsToProcessOneJob
+// #97
+func TestRPMScalingForFastRunningWorkers(t *testing.T) {
+	c := desiredWorkerTester{
+		queueName:               "q",
+		queueMessages:           0,            // queued jobs=0, in process=0
+		messagesSentPerMinute:   float64(120), // rpm averaged over 10mins
+		secondsToProcessOneJob:  float64(1),   // fast processing
+		targetMessagesPerWorker: 60,
+		currentWorkers:          1,
+		idleWorkers:             0,
+		minWorkers:              0,
+		maxWorkers:              100,
+		maxDisruption:           "100%",
+	}
+
+	c.test(t, 2)
+}

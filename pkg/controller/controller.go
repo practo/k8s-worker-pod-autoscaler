@@ -642,7 +642,7 @@ func GetDesiredWorkers(
 	klog.V(4).Infof("%s qMsgs=%v, qMsgsPerMin=%v \n",
 		queueName, queueMessages, messagesSentPerMinute)
 	klog.V(4).Infof("%s secToProcessJob=%v, maxDisruption=%v \n",
-		queueName, secondsToProcessOneJob, maxDisruption)
+		queueName, secondsToProcessOneJob, *maxDisruption)
 	klog.V(4).Infof("%s current=%v, idle=%v \n",
 		queueName, currentWorkers, idleWorkers)
 	klog.V(3).Infof("%s minComputed=%v, maxDisruptable=%v\n",
