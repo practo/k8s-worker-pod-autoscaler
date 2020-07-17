@@ -19,6 +19,7 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
 	"time"
 
 	wpav1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
@@ -61,6 +62,18 @@ func newWorkerPodAutoScalers(c *K8sV1Client, namespace string) *workerPodAutoSca
 		client: c.RESTClient(),
 		ns:     namespace,
 	}
+}
+
+// validate check if the caller has set the right fields.
+func validate(s *wpav1.WorkerPodAutoScaler) error {
+	if *s.Spec.MaxReplicas < 1 {
+		return fmt.Errorf("'max' is a required parameter and must be at least 1")
+	}
+	if *s.Spec.MinReplicas > *s.Spec.MaxReplicas {
+		return fmt.Errorf("'max' must be greater than or equal to 'min'")
+	}
+
+	return nil
 }
 
 // Get takes name of the workerPodAutoScaler, and returns the corresponding workerPodAutoScaler object, and an error if there is any.
@@ -111,18 +124,31 @@ func (c *workerPodAutoScalers) Watch(opts v1.ListOptions) (watch.Interface, erro
 // Create takes the representation of a workerPodAutoScaler and creates it.  Returns the server's representation of the workerPodAutoScaler, and an error, if there is any.
 func (c *workerPodAutoScalers) Create(workerPodAutoScaler *wpav1.WorkerPodAutoScaler) (result *wpav1.WorkerPodAutoScaler, err error) {
 	result = &wpav1.WorkerPodAutoScaler{}
+
+	err = validate(workerPodAutoScaler)
+	if err != nil {
+		return result, err
+	}
+
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("workerpodautoscalers").
 		Body(workerPodAutoScaler).
 		Do().
 		Into(result)
-	return
+
+	return result, err
 }
 
 // Update takes the representation of a workerPodAutoScaler and updates it. Returns the server's representation of the workerPodAutoScaler, and an error, if there is any.
 func (c *workerPodAutoScalers) Update(workerPodAutoScaler *wpav1.WorkerPodAutoScaler) (result *wpav1.WorkerPodAutoScaler, err error) {
 	result = &wpav1.WorkerPodAutoScaler{}
+
+	err = validate(workerPodAutoScaler)
+	if err != nil {
+		return result, err
+	}
+
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("workerpodautoscalers").
@@ -130,7 +156,8 @@ func (c *workerPodAutoScalers) Update(workerPodAutoScaler *wpav1.WorkerPodAutoSc
 		Body(workerPodAutoScaler).
 		Do().
 		Into(result)
-	return
+
+	return result, err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
