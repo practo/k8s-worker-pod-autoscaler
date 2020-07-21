@@ -69,12 +69,12 @@ spec:
               targetMessagesPerWorker:
                 type: integer
                 format: int32
-                description: 'Number of jobs in the queue which have not been picked up by the workers. This also used to calculate the desired number of workers'
+                description: 'Target ratio between the number of queued jobs(both available and reserved) and the number of workers required to process them. For long running workers with visible backlog, this value may be set to 1 so that each job spawns a new worker (upto maxReplicas)'
               secondsToProcessOneJob:
                 type: number
                 format: float
                 nullable: true
-                description: 'This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds'
+                description: 'For fast running workers doing high RPM, the backlog is very close to zero. So for such workers scale up cannot happen based on the backlog, hence this is a really important specification to always keep the minimum number of workers running based on the queue RPM. (highly recommended, default=0.0 i.e. disabled).'
   - name: v1alpha1
     served: true
     storage: false
