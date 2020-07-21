@@ -1,6 +1,22 @@
 # Upgrade Worker Pod Autoscaler
 
-## Upgrade from v0.2 to v1
+## Upgrade from v1.0 to v1.1
+
+### Breaking Changes
+There is no backward breaking change from `v1.0` to `v1.1`.
+
+### Recommended Actions
+Update the WorkerPodAutoScaler CRD to give WPA access to fetch Replicaset.
+```
+kubectl apply -f ./artifacts/crd.yaml
+```
+
+Note: Support for `v1alpha1` will be discontinued from `v1.2`.
+
+### Changes
+- [v1.1.0](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.1.0)
+
+## Upgrade from v0.2 to v1.0
 
 ### Breaking Changes
 There is no backward breaking change from `v0.2` to `v1`.

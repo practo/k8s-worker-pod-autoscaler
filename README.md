@@ -222,12 +222,12 @@ git pull origin master
 - Build and push the image to `hub.docker.com/practodev`. Note: practodev push access is required.
 ```
 git fetch --tags
-git tag v1.0.0
+git tag v1.1.0
 make push
 ```
-Note: For every tag major and major minor versions tags also available. For example: `v1` and `v1.0`
+Note: For every tag major and major minor versions tags also available. For example: `v1` and `v1.1`
 
-- Create a Release in Github. Refer [this](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.0.0) and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
+- Create a Release in Github. Refer [this](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.1.0) and create a release. Release should contain the Changelog information of all the issues and pull request after the last release.
 
 -  Publish the release in Github 🎉
 
