@@ -28,7 +28,7 @@ export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ./hack/install.sh
 ```
 
-Note: IAM policy required is [this](artifacts/iam-policy.json)
+Note: `AWS_` variables needs to exported only when using SQS and the node role in which the WPA pod runs do not have the [required IAM Policy](artifacts/iam-policy.json).
 
 ### Verify Installation
 Check the wpa resource is accessible using kubectl
@@ -84,13 +84,29 @@ Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tub
 | deploymentName | Name of the kubernetes Deployment in the same namespace as WPA object. | No* |
 | replicaSetName | Name of the kubernetes ReplicaSet in the same namespace as WPA object. | No* |
 | queueURI       | Full URL of the queue.                                                 | Yes |
-| targetMessagesPerWorker |  Number of jobs in the queue which have not been picked up by the workers. This is also used to calculate the desired number of workers. | Yes |
-| secondsToProcessOneJob | This metric is useful to calculate the desired number of workers more accurately. It is particularly very useful for workers which have `targetMessagesPerWorker` as always zero. `secondsToProcessOneJob` in the combination with `messagesSentPerMinute`(queue RPM) helps in calculating the minimum workers that is expected to be running to handle `messagesSentPerMinute`(RPM) with every job being processed in `secondsToProcessOneJob` seconds. (highly recommended, default=0.0 i.e. disabled). | No |
+| targetMessagesPerWorker | Target ratio between the number of queued jobs(both available and reserved) and the number of workers required to process them. For long running workers with visible backlog, this value may be set to 1 so that each job spawns a new worker (upto maxReplicas). | Yes |
+| secondsToProcessOneJob | For fast running workers doing high RPM, the backlog is very close to zero. So for such workers scale up cannot happen based on the backlog, hence this is a really important specification to always keep the minimum number of workers running based on the queue RPM. (highly recommended, default=0.0 i.e. disabled). | No |
 | maxDisruption | Amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity. Using this you can control how fast a scale down can happen. This can be expressed both as an absolute value and a percentage. (default is the WPA flag `--wpa-default-max-disruption`). | No |
 
-*It is mandatory to set either `deploymentName` or `replicaSetName`.
+* It is mandatory to set either `deploymentName` or `replicaSetName`.
 
-`maxDisruption` explained with the help of some examples:
+### Explained the above specifications with examples:
+
+- `targetMessagesPerWorker`:
+```
+availableMessages=90(backlog), reservedMessages=110(inprocess), and 10 workers are required to process 110+90=200 messages then
+targetMessagesPerWorker=110+90/10 = 20
+```
+
+- `secondsToProcessOneJob`:
+```
+secondsToProcessOneJob=0.5
+queueRPM=300
+min=1
+minWorkersBasedOnRPM=Ceil(0.5*300/60)=3, so there will be minium 3 workers running based on the RPM.
+```
+
+- `maxDisruption`:
 ```
 min=2, max=1000, current=500, maxDisruption=50%: then the scale down cannot bring down more than 250 pods in a single scale down activity.
 ```
