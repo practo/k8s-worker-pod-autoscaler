@@ -94,12 +94,16 @@ Beanstalk's queueURI would be like: `beanstalk://beanstalkDNSName:11300/test-tub
 
 - `targetMessagesPerWorker`:
 ```
-
+availableMessages=90(backlog), reservedMessages=110(inprocess), and 10 workers are required to process 110+90=200 messages then
+targetMessagesPerWorker=110+90/10 = 20
 ```
 
 - `secondsToProcessOneJob`:
 ```
-
+secondsToProcessOneJob=0.5
+queueRPM=300
+min=1
+minWorkersBasedOnRPM=Ceil(0.5*300/60)=3, so there will be minium 3 workers running based on the RPM.
 ```
 
 - `maxDisruption`:
