@@ -72,7 +72,7 @@ func (p *Poller) Sync(stopCh <-chan struct{}) {
 				p.threads[key] = status
 			}
 		case <-stopCh:
-			klog.Info("Stopping sync thread of poller gracefully.")
+			klog.V(1).Info("Stopping sync thread of poller gracefully.")
 			return
 		}
 	}
@@ -101,7 +101,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 				}
 			}
 		case <-stopCh:
-			klog.Info("Stopping poller(s) and thread manager gracefully.")
+			klog.V(1).Info("Stopping poller(s) and thread manager gracefully.")
 			return
 		}
 	}
