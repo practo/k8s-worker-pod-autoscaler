@@ -20,12 +20,12 @@ type WorkerPodAutoScaler struct {
 type WorkerPodAutoScalerSpec struct {
 	MinReplicas             *int32   `json:"minReplicas"`
 	MaxReplicas             *int32   `json:"maxReplicas"`
-	MaxDisruption           *string  `json:"maxDisruption"`
+	MaxDisruption           *string  `json:"maxDisruption,omitempty"`
 	QueueURI                string   `json:"queueURI"`
-	DeploymentName          string   `json:"deploymentName"`
-	ReplicaSetName          string   `json:"replicaSetName"`
+	DeploymentName          string   `json:"deploymentName,omitempty"`
+	ReplicaSetName          string   `json:"replicaSetName,omitempty"`
 	TargetMessagesPerWorker *int32   `json:"targetMessagesPerWorker"`
-	SecondsToProcessOneJob  *float64 `json:"secondsToProcessOneJob"`
+	SecondsToProcessOneJob  *float64 `json:"secondsToProcessOneJob,omitempty"`
 }
 
 // WorkerPodAutoScalerStatus is the status for a WorkerPodAutoScaler resource
