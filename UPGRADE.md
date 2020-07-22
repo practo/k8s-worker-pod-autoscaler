@@ -6,8 +6,9 @@
 There is no backward breaking change from `v1.0` to `v1.1`.
 
 ### Recommended Actions
-Update the WorkerPodAutoScaler CRD to give WPA access to fetch Replicaset.
+Update the WorkerPodAutoScaler Clusterrole to give WPA access to fetch Replicaset and also the CRD.
 ```
+kubectl apply -f ./artifacts/clusterrole.yaml
 kubectl apply -f ./artifacts/crd.yaml
 ```
 
