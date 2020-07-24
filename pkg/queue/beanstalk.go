@@ -105,7 +105,7 @@ func NewBeanstalkClient(queueURI string) (BeanstalkClientInterface, error) {
 }
 
 func (c *beanstalkClient) reestablishConn() error {
-	klog.Infof("Re-establishing connection for %s\n", c.queueURI)
+	klog.V(2).Infof("Re-establishing connection for %s\n", c.queueURI)
 	newConn, err := getBeanstalkConn(c.queueURI)
 	c.conn = newConn
 	if err != nil {
@@ -345,7 +345,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 		// 		queueSpec.name, err)
 		// }
 		// b.queues.updateMessageSent(key, messagesSentPerMinute)
-		// klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
+		// klog.V(3).Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
 	}
 
 	approxMessages, approxMessagesNotVisible, err := b.getMessages(queueSpec.uri)
@@ -354,7 +354,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 			queueSpec.name, err)
 		return
 	}
-	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
+	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 	b.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 
 	if approxMessages != 0 {
@@ -367,10 +367,10 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
 	// do not scale down as those messages are still being processed (and we dont know which worker)
 
-	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+	klog.V(4).Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {
-		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
+		klog.V(3).Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
 		b.waitForShortPollInterval()
 		return
 	}
@@ -383,7 +383,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 		return
 	}
 
-	klog.Infof("%s: workers=%d, idleWorkers=%d",
+	klog.V(3).Infof("%s: workers=%d, idleWorkers=%d",
 		queueSpec.name,
 		queueSpec.workers,
 		idleWorkers,

@@ -137,7 +137,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 		case listResultCh := <-q.listCh:
 			listResultCh <- DeepCopyItem(q.item)
 		case <-stopCh:
-			klog.Info("Stopping queue syncer gracefully.")
+			klog.V(1).Info("Stopping queue syncer gracefully.")
 			return
 		}
 	}

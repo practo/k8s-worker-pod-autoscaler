@@ -42,7 +42,7 @@ func InitConfig(name string) error {
 		return err
 	}
 
-	klog.V(99).Infof("Using config file: %s", viper.ConfigFileUsed())
+	klog.V(5).Infof("Using config file: %s", viper.ConfigFileUsed())
 
 	return nil
 }

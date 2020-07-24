@@ -221,7 +221,7 @@ func NewController(
 		Queues:                     queues,
 	}
 
-	klog.Info("Setting up event handlers")
+	klog.V(4).Info("Setting up event handlers")
 
 	// Set up an event handler for when WorkerPodAutoScaler resources change
 	workerPodAutoScalerInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -243,21 +243,21 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	klog.Info("Starting WorkerPodAutoScaler controller")
+	klog.V(1).Info("Starting WorkerPodAutoScaler controller")
 
 	// Wait for the caches to be synced before starting workers
-	klog.Info("Waiting for informer caches to sync")
+	klog.V(1).Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.deploymentsSynced, c.workerPodAutoScalersSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.Info("Starting workers")
+	klog.V(1).Info("Starting workers")
 	// Launch two workers to process WorkerPodAutoScaler resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 	<-stopCh
-	klog.Info("Shutting down workers")
+	klog.V(1).Info("Shutting down workers")
 
 	return nil
 }
@@ -314,7 +314,6 @@ func (c *Controller) processNextWorkItem() bool {
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
-		// klog.Infof("Successfully synced '%s'", event)
 		return nil
 	}(obj)
 
@@ -432,7 +431,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
-	klog.V(1).Infof("%s qMsgs: %d, desired: %d",
+	klog.V(2).Infof("%s qMsgs: %d, desired: %d",
 		queueName, queueMessages, desiredWorkers)
 
 	// set metrics
@@ -588,7 +587,7 @@ func getMinWorkers(
 	}
 
 	workersBasedOnMessagesSent := int32(math.Ceil((secondsToProcessOneJob * messagesSentPerMinute) / 60))
-	//klog.Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
+	klog.V(4).Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
 	if workersBasedOnMessagesSent > minWorkers {
 		return workersBasedOnMessagesSent
 	}
@@ -756,10 +755,10 @@ func updateWorkerPodAutoScalerStatus(
 		workerPodAutoScaler.Status.AvailableReplicas == availableWorkers &&
 		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
 		workerPodAutoScaler.Status.CurrentMessages == queueMessages {
-		klog.Infof("%s/%s: WPA status is already up to date\n", namespace, name)
+		klog.V(4).Infof("%s/%s: WPA status is already up to date\n", namespace, name)
 		return
 	} else {
-		klog.Infof("%s/%s: Updating wpa status\n", namespace, name)
+		klog.V(4).Infof("%s/%s: Updating wpa status\n", namespace, name)
 	}
 
 	// NEVER modify objects from the store. It's a read-only, local cache.
@@ -779,7 +778,7 @@ func updateWorkerPodAutoScalerStatus(
 		klog.Errorf("Error updating wpa status, err: %v", err)
 		return
 	}
-	klog.Infof("%s/%s: Updated wpa status\n", namespace, name)
+	klog.V(4).Infof("%s/%s: Updated wpa status\n", namespace, name)
 	return
 }
 

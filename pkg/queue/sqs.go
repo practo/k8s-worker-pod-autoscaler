@@ -394,7 +394,7 @@ func (s *SQS) Sync(stopCh <-chan struct{}) {
 		case cacheResultCh := <-s.cacheReceiveMessagesListCh:
 			cacheResultCh <- s.cacheReceiveMessages
 		case <-stopCh:
-			klog.Info("Stopping sqs syncer gracefully.")
+			klog.V(1).Info("Stopping sqs syncer gracefully.")
 			return
 		}
 	}
@@ -437,7 +437,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 			return
 		}
 		s.queues.updateMessageSent(key, messagesSentPerMinute)
-		klog.Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
+		klog.V(3).Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
 	}
 
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)
@@ -456,7 +456,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 			return
 		}
 	}
-	klog.Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
+	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
 
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
@@ -477,7 +477,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 			return
 		}
 	}
-	// klog.Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+	klog.V(3).Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	s.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 
@@ -488,7 +488,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	}
 
 	if approxMessagesNotVisible > 0 {
-		klog.Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
+		klog.V(3).Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
 		s.waitForShortPollInterval()
 		return
 	}
@@ -509,7 +509,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		idleWorkers = 0
 	}
 
-	klog.Infof("%s: msgsReceived=%f, workers=%d, idleWorkers=%d",
+	klog.V(3).Infof("%s: msgsReceived=%f, workers=%d, idleWorkers=%d",
 		queueSpec.name,
 		numberOfMessagesReceived,
 		queueSpec.workers,
