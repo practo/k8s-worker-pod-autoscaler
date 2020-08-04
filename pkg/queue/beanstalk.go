@@ -307,13 +307,6 @@ func (b *Beanstalk) GetName() string {
 	return b.name
 }
 
-func (b *Beanstalk) Sync(stopCh <-chan struct{}) {
-	// Sync is only required when cache is implemented
-	// keeping the noop function to keep the impl same as
-	// other queue providers
-	return
-}
-
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	if queueSpec.workers == 0 && queueSpec.messages == 0 {
 		// If there are no workers running we do a long poll to find a job(s)

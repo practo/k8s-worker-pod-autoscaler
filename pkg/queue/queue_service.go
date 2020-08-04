@@ -15,7 +15,6 @@ const (
 type QueuingService interface {
 	// GetName returns the name of the queing service
 	GetName() string
-	Sync(stopCh <-chan struct{})
 	// poll functions polls the queue service provider is responsible to update
 	// the queueSpec with the polled information
 	// informations it updates are
