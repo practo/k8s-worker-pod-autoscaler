@@ -30,10 +30,8 @@ type SQS struct {
 
 	// cache the numberOfSentMessages as it is refreshed
 	// in aws every 1minute - prevent un-necessary api calls
-	cacheSentMessages              map[string]float64
+	cacheSentMessages              *sync.Map
 	cacheSentMessagesValidity      time.Duration
-	cacheSentMessagesListCh        chan chan map[string]float64
-	cacheSentMessagesUpdateCh      chan map[string]float64
 	cacheSentMessageslastTimestamp *sync.Map
 
 	// cache the numberOfReceiveMessages as it is refreshed
@@ -77,10 +75,8 @@ func NewSQS(
 		shortPollInterval: time.Second * time.Duration(shortPollInterval),
 		longPollInterval:  int64(longPollInterval),
 
-		cacheSentMessages:              make(map[string]float64),
+		cacheSentMessages:              new(sync.Map),
 		cacheSentMessagesValidity:      time.Second * time.Duration(60),
-		cacheSentMessagesListCh:        make(chan chan map[string]float64),
-		cacheSentMessagesUpdateCh:      make(chan map[string]float64),
 		cacheSentMessageslastTimestamp: new(sync.Map),
 
 		cacheReceiveMessages:              make(map[string]float64),
@@ -222,24 +218,17 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 	return 0.0, nil
 }
 
-func (s *SQS) listAllSentMessageCache() map[string]float64 {
-	cacheResultCh := make(chan map[string]float64)
-	s.cacheSentMessagesListCh <- cacheResultCh
-	return <-cacheResultCh
-}
-
 func (s *SQS) getSentMessageCache(queueURI string) (float64, bool) {
-	allCache := s.listAllSentMessageCache()
-	if cache, ok := allCache[queueURI]; ok {
-		return cache, true
+	cache, _ := s.cacheSentMessages.Load(queueURI)
+	if cache != nil {
+		return cache.(float64), true
 	}
+
 	return 0.0, false
 }
 
 func (s *SQS) updateSentMessageCache(key string, cache float64) {
-	s.cacheSentMessagesUpdateCh <- map[string]float64{
-		key: cache,
-	}
+	s.cacheSentMessages.Store(key, cache)
 }
 
 func (s *SQS) cachedNumberOfSentMessages(queueURI string) (float64, error) {
@@ -381,16 +370,10 @@ func (s *SQS) GetName() string {
 func (s *SQS) Sync(stopCh <-chan struct{}) {
 	for {
 		select {
-		case update := <-s.cacheSentMessagesUpdateCh:
-			for key, value := range update {
-				s.cacheSentMessages[key] = value
-			}
 		case update := <-s.cacheReceiveMessagesUpdateCh:
 			for key, value := range update {
 				s.cacheReceiveMessages[key] = value
 			}
-		case cacheResultCh := <-s.cacheSentMessagesListCh:
-			cacheResultCh <- s.cacheSentMessages
 		case cacheResultCh := <-s.cacheReceiveMessagesListCh:
 			cacheResultCh <- s.cacheReceiveMessages
 		case <-stopCh:
