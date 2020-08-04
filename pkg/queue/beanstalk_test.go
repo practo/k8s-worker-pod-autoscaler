@@ -54,7 +54,6 @@ func buildQueues(
 	if err != nil {
 		return nil, nil, err
 	}
-	go poller.Sync(stopCh)
 
 	return queues, poller.(*Beanstalk), nil
 }
