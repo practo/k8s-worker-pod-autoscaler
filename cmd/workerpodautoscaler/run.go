@@ -168,7 +168,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	}
 
 	for _, queuingService := range queuingServices {
-		go queuingService.Sync(stopCh)
 		poller := queue.NewPoller(queues, queuingService)
 		go poller.Sync(stopCh)
 		go poller.Run(stopCh)
