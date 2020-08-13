@@ -1,5 +1,4 @@
 # github.com/aws/aws-sdk-go v1.29.15
-## explicit
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/awserr
 github.com/aws/aws-sdk-go/aws/awsutil
@@ -38,7 +37,6 @@ github.com/aws/aws-sdk-go/service/sqs
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/beanstalkd/go-beanstalk v0.0.0-20200526060843-1cc502ecaf3c
-## explicit
 github.com/beanstalkd/go-beanstalk
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
@@ -58,7 +56,6 @@ github.com/gogo/protobuf/sortkeys
 # github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef
 github.com/golang/groupcache/lru
 # github.com/golang/mock v1.4.3
-## explicit
 github.com/golang/mock/gomock
 # github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
@@ -105,7 +102,6 @@ github.com/magiconair/properties
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/mitchellh/go-homedir v1.1.0
-## explicit
 github.com/mitchellh/go-homedir
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
@@ -116,13 +112,10 @@ github.com/modern-go/reflect2
 # github.com/pelletier/go-toml v1.2.0
 github.com/pelletier/go-toml
 # github.com/practo/klog/v2 v2.2.1
-## explicit
 github.com/practo/klog/v2
 # github.com/practo/promlog v1.0.0
-## explicit
 github.com/practo/promlog
 # github.com/prometheus/client_golang v1.7.0
-## explicit
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promhttp
@@ -142,15 +135,12 @@ github.com/spf13/afero/mem
 # github.com/spf13/cast v1.3.0
 github.com/spf13/cast
 # github.com/spf13/cobra v0.0.5
-## explicit
 github.com/spf13/cobra
 # github.com/spf13/jwalterweatherman v1.0.0
 github.com/spf13/jwalterweatherman
 # github.com/spf13/pflag v1.0.3
-## explicit
 github.com/spf13/pflag
 # github.com/spf13/viper v1.4.0
-## explicit
 github.com/spf13/viper
 # golang.org/x/crypto v0.0.0-20181203042331-505ab145d0a9 => golang.org/x/crypto v0.0.0-20181025213731-e84da0312774
 golang.org/x/crypto/ssh/terminal
@@ -255,7 +245,6 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v2 v2.2.5
 gopkg.in/yaml.v2
 # k8s.io/api v0.0.0 => k8s.io/api v0.0.0-20190819141258-3544db3b9e44
-## explicit
 k8s.io/api/admissionregistration/v1beta1
 k8s.io/api/apps/v1
 k8s.io/api/apps/v1beta1
@@ -292,15 +281,7 @@ k8s.io/api/settings/v1alpha1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apiextensions-apiserver v0.0.0 => k8s.io/apiextensions-apiserver v0.0.0-20190819143637-0dbe462fe92d
-## explicit
-k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
-k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1
-k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
-k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
-k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 # k8s.io/apimachinery v0.0.0 => k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
-## explicit
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
 k8s.io/apimachinery/pkg/api/resource
@@ -344,7 +325,6 @@ k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
 # k8s.io/client-go v0.0.0 => k8s.io/client-go v0.0.0-20190819141724-e14f31a72a77
-## explicit
 k8s.io/client-go/discovery
 k8s.io/client-go/discovery/fake
 k8s.io/client-go/informers
@@ -496,7 +476,6 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/code-generator v0.0.0-20190612205613-18da4a14b22b => k8s.io/code-generator v0.0.0-20190612205613-18da4a14b22b
-## explicit
 k8s.io/code-generator
 k8s.io/code-generator/cmd/client-gen
 k8s.io/code-generator/cmd/client-gen/args
@@ -547,19 +526,6 @@ k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/utils v0.0.0-20190221042446-c2654d5206da
 k8s.io/utils/buffer
 k8s.io/utils/integer
-k8s.io/utils/pointer
 k8s.io/utils/trace
 # sigs.k8s.io/yaml v1.1.0
 sigs.k8s.io/yaml
-# github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.0
-# golang.org/x/crypto => golang.org/x/crypto v0.0.0-20181025213731-e84da0312774
-# golang.org/x/net => golang.org/x/net v0.0.0-20190206173232-65e2d4e15006
-# golang.org/x/sync => golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
-# golang.org/x/sys => golang.org/x/sys v0.0.0-20190209173611-3b5209105503
-# golang.org/x/text => golang.org/x/text v0.3.1-0.20181227161524-e6919f6577db
-# golang.org/x/tools => golang.org/x/tools v0.0.0-20190313210603-aa82965741a9
-# k8s.io/api => k8s.io/api v0.0.0-20190819141258-3544db3b9e44
-# k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190819143637-0dbe462fe92d
-# k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
-# k8s.io/client-go => k8s.io/client-go v0.0.0-20190819141724-e14f31a72a77
-# k8s.io/code-generator => k8s.io/code-generator v0.0.0-20190612205613-18da4a14b22b
