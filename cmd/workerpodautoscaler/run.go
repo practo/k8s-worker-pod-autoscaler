@@ -59,6 +59,7 @@ func (v *runCmd) new() *cobra.Command {
 		"metrics-port",
 		"k8s-api-qps",
 		"k8s-api-burst",
+		"namespace",
 	}
 
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
@@ -75,6 +76,8 @@ func (v *runCmd) new() *cobra.Command {
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
 	flags.Float64("k8s-api-qps", 5.0, "qps indicates the maximum QPS to the k8s api from the clients(wpa).")
 	flags.Int("k8s-api-burst", 10, "maximum burst for throttle between requests from clients(wpa) to k8s api")
+
+	flags.String("namespace", "", "specify the namespace to listen to")
 	for _, flagName := range flagNames {
 		if err := v.BindFlag(flagName); err != nil {
 			fmt.Println(err)
@@ -110,6 +113,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	metricsPort := v.Viper.GetString("metrics-port")
 	k8sApiQPS := float32(v.Viper.GetFloat64("k8s-api-qps"))
 	k8sApiBurst := v.Viper.GetInt("k8s-api-burst")
+	namespace := v.Viper.GetString("namespace")
 
 	hook := promlog.MustNewPrometheusHook("wpa_", klog.WarningSeverityLevel)
 	klog.AddHook(hook)
@@ -173,10 +177,10 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		go poller.Run(stopCh)
 	}
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(
-		kubeClient, resyncPeriod)
-	customInformerFactory := informers.NewSharedInformerFactory(
-		customClient, resyncPeriod)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(
+		kubeClient, resyncPeriod, kubeinformers.WithNamespace(namespace))
+	customInformerFactory := informers.NewSharedInformerFactoryWithOptions(
+		customClient, resyncPeriod, informers.WithNamespace(namespace))
 
 	controller := workerpodautoscalercontroller.NewController(
 		kubeClient, customClient,

@@ -135,6 +135,7 @@ Flags:
       --k8s-api-qps float                   qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
       --kube-config string                  path of the kube config file, if not specified in cluster config is used
       --metrics-port string                 specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
+      --namespace                           specify the namespace to listen to (default "" all namespaces)
       --queue-services string               comma separated queue services, the WPA will start with (default "sqs,beanstalkd")
       --resync-period int                   sync period for the worker pod autoscaler (default 20)
       --sqs-long-poll-interval int          the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
