@@ -92,6 +92,11 @@ func getBeanstalkConn(queueURI string) (*beanstalk.Conn, error) {
 	if err != nil {
 		return nil, errors.New("dial-error: " + err.Error())
 	}
+
+	if conn == nil {
+		return nil, fmt.Errorf("Connection nil for: %s\n", queueURI)
+	}
+
 	return conn, nil
 }
 
