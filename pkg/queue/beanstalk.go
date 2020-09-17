@@ -196,8 +196,17 @@ func (c *beanstalkClient) put(
 func (c *beanstalkClient) doLongPoll(
 	longPollInterval int64) (bool, uint64, error) {
 
+	var id uint64
+	var err error
+
 	tubeSet := beanstalk.NewTubeSet(c.conn, path.Base(c.queueURI))
-	id, _, err := tubeSet.Reserve(
+	if tubeSet == nil {
+		err = c.reestablishConn()
+		if err != nil {
+			return false, id, err
+		}
+	}
+	id, _, err = tubeSet.Reserve(
 		time.Duration(longPollInterval) * time.Second)
 	if err == nil {
 		return true, id, nil
