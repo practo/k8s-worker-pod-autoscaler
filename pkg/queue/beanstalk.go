@@ -325,7 +325,8 @@ func (b *Beanstalk) waitForShortPollInterval() {
 func (b *Beanstalk) reestablishConn(queueURI string) {
 	client, err := b.getClient(queueURI)
 	if err != nil {
-		klog.Error(err)
+		klog.Errorf("Could not reestablish conn, err:%v\n", err)
+		return
 	}
 
 	err = client.reestablishConn()
