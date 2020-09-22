@@ -61,6 +61,7 @@ type BeanstalkClientInterface interface {
 	put(body []byte, pri uint32, delay, t time.Duration) (id uint64, err error)
 	getStats() (int32, int32, int32, error)
 	longPollReceiveMessage(longPollInterval int64) (int32, int32, error)
+	reestablishConn() error
 }
 
 type beanstalkClient struct {
@@ -318,6 +319,16 @@ func (b *Beanstalk) waitForShortPollInterval() {
 	time.Sleep(b.shortPollInterval)
 }
 
+func (b *Beanstalk) reestablishConn(queueURI string) {
+	client, err := b.getClient(queueURI)
+	if err != nil {
+		klog.Error(err)
+	}
+
+	err = client.reestablishConn()
+	klog.Error(err)
+}
+
 func (b *Beanstalk) GetName() string {
 	return b.name
 }
@@ -335,6 +346,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 		if err != nil {
 			klog.Errorf("Unable to perform request long polling %q, %v.",
 				queueSpec.name, err)
+			b.reestablishConn(queueSpec.uri)
 			return
 		}
 
@@ -360,6 +372,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	if err != nil {
 		klog.Errorf("Unable to get approximate messages in queue %q, %v.",
 			queueSpec.name, err)
+		b.reestablishConn(queueSpec.uri)
 		return
 	}
 	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
@@ -387,6 +400,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	if err != nil {
 		klog.Errorf("Unable to fetch idle workers %q, %v.",
 			queueSpec.name, err)
+		b.reestablishConn(queueSpec.uri)
 		time.Sleep(100 * time.Millisecond)
 		return
 	}
