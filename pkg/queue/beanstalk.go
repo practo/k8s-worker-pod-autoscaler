@@ -264,6 +264,9 @@ func (b *Beanstalk) getClient(
 	if err != nil {
 		return nil, err
 	}
+	if client == nil {
+		return nil, fmt.Errorf("Not able to make client for: %s\n", queueURI)
+	}
 	b.clientPool.Store(queueURI, client)
 
 	return client.(BeanstalkClientInterface), nil
