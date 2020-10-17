@@ -87,8 +87,13 @@ func (s *SQS) getSQSClient(queueURI string) *sqs.SQS {
 	return s.sqsClientPool[getRegion(queueURI)]
 }
 
-func (s *SQS) getCWClient(queueURI string) *cloudwatch.CloudWatch {
-	return s.cwClientPool[getRegion(queueURI)]
+func (s *SQS) getCWClient(queueURI string) (*cloudwatch.CloudWatch, error) {
+	client, ok := s.cwClientPool[getRegion(queueURI)]
+	if !ok {
+		return nil, fmt.Errorf("Client not found for queue: %s\n", queueURI)
+	}
+
+	return client, nil
 }
 
 func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
@@ -187,7 +192,12 @@ func (s *SQS) getNumberOfMessagesReceived(queueURI string) (float64, error) {
 		},
 	}
 
-	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
+	cwClient, err := s.getCWClient(queueURI)
+	if err != nil {
+		return 0.0, err
+	}
+
+	result, err := cwClient.GetMetricData(&cloudwatch.GetMetricDataInput{
 		EndTime:           &endTime,
 		StartTime:         &startTime,
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
@@ -315,7 +325,12 @@ func (s *SQS) getAverageNumberOfMessagesSent(queueURI string) (float64, error) {
 		},
 	}
 
-	result, err := s.getCWClient(queueURI).GetMetricData(&cloudwatch.GetMetricDataInput{
+	cwClient, err := s.getCWClient(queueURI)
+	if err != nil {
+		return 0.0, err
+	}
+
+	result, err := cwClient.GetMetricData(&cloudwatch.GetMetricDataInput{
 		EndTime:           &endTime,
 		StartTime:         &startTime,
 		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},

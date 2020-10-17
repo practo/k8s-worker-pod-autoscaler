@@ -84,3 +84,17 @@ func (mr *MockBeanstalkClientInterfaceMockRecorder) put(arg0, arg1, arg2, arg3 i
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "put", reflect.TypeOf((*MockBeanstalkClientInterface)(nil).put), arg0, arg1, arg2, arg3)
 }
+
+// reestablishConn mocks base method
+func (m *MockBeanstalkClientInterface) reestablishConn() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "reestablishConn")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// put indicates an expected call of put
+func (mr *MockBeanstalkClientInterfaceMockRecorder) reestablishConn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "reestablishConn", reflect.TypeOf((*MockBeanstalkClientInterface)(nil).reestablishConn))
+}
