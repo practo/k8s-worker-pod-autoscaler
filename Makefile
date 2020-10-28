@@ -60,8 +60,8 @@ define \n
 
 endef
 
-BUILD_IMAGE ?= golang:1.15.1-alpine
-TEST_IMAGE ?= practodev/golang:1.15.1-alpine-test
+BUILD_IMAGE ?= golang:1.15.3-alpine
+TEST_IMAGE ?= practodev/golang:1.15.3-alpine-test
 
 # If you want to build all binaries, see the 'all-build' rule.
 # If you want to build all containers, see the 'all-container' rule.
