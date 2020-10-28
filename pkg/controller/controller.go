@@ -22,11 +22,11 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 
-	v1alpha1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1alpha1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	samplescheme "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
-	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler/v1alpha1"
-	listers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1alpha1"
+	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler/v1"
+	listers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1"
 	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
 )
 
@@ -746,7 +746,7 @@ func updateWorkerPodAutoScalerStatus(
 	namespace string,
 	customclientset clientset.Interface,
 	desiredWorkers int32,
-	workerPodAutoScaler *v1alpha1.WorkerPodAutoScaler,
+	workerPodAutoScaler *v1.WorkerPodAutoScaler,
 	currentWorkers int32,
 	availableWorkers int32,
 	queueMessages int32) {
@@ -773,7 +773,7 @@ func updateWorkerPodAutoScalerStatus(
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := customclientset.K8sV1alpha1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
+	_, err := customclientset.K8sV1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
 	if err != nil {
 		klog.Errorf("Error updating wpa status, err: %v", err)
 		return

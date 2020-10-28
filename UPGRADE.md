@@ -1,5 +1,17 @@
 # Upgrade Worker Pod Autoscaler
 
+## Upgrade from v1.1 to v1.2
+
+### Breaking changes
+`v1alpha1` was discontinued. Please move to `v1`.
+
+### Recommended Actions
+```
+kubectl apply -f ./artifacts/crd.yaml
+```
+### Changes
+- [v1.2.0](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.2.0)
+
 ## Upgrade from v1.0 to v1.1
 
 ### Breaking Changes
