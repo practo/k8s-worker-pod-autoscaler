@@ -3,7 +3,7 @@
 ## Upgrade from v1.2 to v1.3
 
 ### Breaking changes
-Updates all the kubernetes dependencies with `v1.19`. It should work for the cluster with older versions, but Kubernetes supports patches and fixes for [last 3 minor releases](https://kubernetes.io/docs/setup/release/version-skew-policy/). It also updates the CRD definations.
+Updates all the kubernetes dependencies with `v1.19`. It should work for the cluster with older versions, but Kubernetes supports patches and fixes for [last 3 minor releases](https://kubernetes.io/docs/setup/release/version-skew-policy/). It also updates the CRD definitions.
 
 ### Recommended Actions
 ```
