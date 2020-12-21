@@ -19,13 +19,14 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	time "time"
 
 	workerpodautoscalerv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
 	versioned "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/internalinterfaces"
-	wpav1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
@@ -35,7 +36,7 @@ import (
 // WorkerPodAutoScalers.
 type WorkerPodAutoScalerInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() wpav1.WorkerPodAutoScalerLister
+	Lister() v1.WorkerPodAutoScalerLister
 }
 
 type workerPodAutoScalerInformer struct {
@@ -57,17 +58,17 @@ func NewWorkerPodAutoScalerInformer(client versioned.Interface, namespace string
 func NewFilteredWorkerPodAutoScalerInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.K8sV1().WorkerPodAutoScalers(namespace).List(options)
+				return client.K8sV1().WorkerPodAutoScalers(namespace).List(context.TODO(), options)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.K8sV1().WorkerPodAutoScalers(namespace).Watch(options)
+				return client.K8sV1().WorkerPodAutoScalers(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&workerpodautoscalerv1.WorkerPodAutoScaler{},
@@ -84,6 +85,6 @@ func (f *workerPodAutoScalerInformer) Informer() cache.SharedIndexInformer {
 	return f.factory.InformerFor(&workerpodautoscalerv1.WorkerPodAutoScaler{}, f.defaultInformer)
 }
 
-func (f *workerPodAutoScalerInformer) Lister() wpav1.WorkerPodAutoScalerLister {
-	return wpav1.NewWorkerPodAutoScalerLister(f.Informer().GetIndexer())
+func (f *workerPodAutoScalerInformer) Lister() v1.WorkerPodAutoScalerLister {
+	return v1.NewWorkerPodAutoScalerLister(f.Informer().GetIndexer())
 }
