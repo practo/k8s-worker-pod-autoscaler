@@ -565,7 +565,7 @@ func (c *CloudWatch) DescribeAlarmsRequest(input *DescribeAlarmsInput) (req *req
 // DescribeAlarms API operation for Amazon CloudWatch.
 //
 // Retrieves the specified alarms. You can filter the results by specifying
-// a a prefix for the alarm name, the alarm state, or a prefix for any action.
+// a prefix for the alarm name, the alarm state, or a prefix for any action.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -698,6 +698,10 @@ func (c *CloudWatch) DescribeAlarmsForMetricRequest(input *DescribeAlarmsForMetr
 //
 // Retrieves the alarms for the specified metric. To filter the results, specify
 // a statistic, period, or unit.
+//
+// This operation retrieves only standard alarms that are based on the specified
+// metric. It does not return alarms based on math expressions that use the
+// specified metric, or composite alarms that use the specified metric.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -864,8 +868,7 @@ func (c *CloudWatch) DescribeInsightRulesRequest(input *DescribeInsightRulesInpu
 
 // DescribeInsightRules API operation for Amazon CloudWatch.
 //
-// Returns a list of all the Contributor Insights rules in your account. All
-// rules in your account are returned with a single operation.
+// Returns a list of all the Contributor Insights rules in your account.
 //
 // For more information about Contributor Insights, see Using Contributor Insights
 // to Analyze High-Cardinality Data (https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/ContributorInsights.html).
@@ -2450,6 +2453,9 @@ func (c *CloudWatch) PutCompositeAlarmRequest(input *PutCompositeAlarmInput) (re
 // When you update an existing alarm, its state is left unchanged, but the update
 // completely overwrites the previous configuration of the alarm.
 //
+// If you are an IAM user, you must have iam:CreateServiceLinkedRole to create
+// a composite alarm that has Systems Manager OpsItem actions.
+//
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
 // the error.
@@ -2734,34 +2740,16 @@ func (c *CloudWatch) PutMetricAlarmRequest(input *PutMetricAlarmInput) (req *req
 // If you are an IAM user, you must have Amazon EC2 permissions for some alarm
 // operations:
 //
-//    * iam:CreateServiceLinkedRole for all alarms with EC2 actions
+//    * The iam:CreateServiceLinkedRole for all alarms with EC2 actions
 //
-//    * ec2:DescribeInstanceStatus and ec2:DescribeInstances for all alarms
-//    on EC2 instance status metrics
-//
-//    * ec2:StopInstances for alarms with stop actions
-//
-//    * ec2:TerminateInstances for alarms with terminate actions
-//
-//    * No specific permissions are needed for alarms with recover actions
-//
-// If you have read/write permissions for Amazon CloudWatch but not for Amazon
-// EC2, you can still create an alarm, but the stop or terminate actions are
-// not performed. However, if you are later granted the required permissions,
-// the alarm actions that you created earlier are performed.
-//
-// If you are using an IAM role (for example, an EC2 instance profile), you
-// cannot stop or terminate the instance using alarm actions. However, you can
-// still see the alarm state and perform any other actions such as Amazon SNS
-// notifications or Auto Scaling policies.
-//
-// If you are using temporary security credentials granted using AWS STS, you
-// cannot stop or terminate an EC2 instance using alarm actions.
+//    * The iam:CreateServiceLinkedRole to create an alarm with Systems Manager
+//    OpsItem actions.
 //
 // The first time you create an alarm in the AWS Management Console, the CLI,
 // or by using the PutMetricAlarm API, CloudWatch creates the necessary service-linked
-// role for you. The service-linked role is called AWSServiceRoleForCloudWatchEvents.
-// For more information, see AWS service-linked role (https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-linked-role).
+// rolea for you. The service-linked roles are called AWSServiceRoleForCloudWatchEvents
+// and AWSServiceRoleForCloudWatchAlarms_ActionSSM. For more information, see
+// AWS service-linked role (https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-linked-role).
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -2867,6 +2855,10 @@ func (c *CloudWatch) PutMetricDataRequest(input *PutMetricDataInput) (req *reque
 // metric collects. Each dimension consists of a Name and Value pair. For more
 // information about specifying dimensions, see Publishing Metrics (https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/publishingMetrics.html)
 // in the Amazon CloudWatch User Guide.
+//
+// You specify the time stamp to be associated with each data point. You can
+// specify time stamps that are as much as two weeks before the current date,
+// and as much as 2 hours after the current day and time.
 //
 // Data points with time stamps from 24 hours ago or longer can take at least
 // 48 hours to become available for GetMetricData (https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html)
@@ -4625,11 +4617,12 @@ func (s *DescribeAnomalyDetectorsOutput) SetNextToken(v string) *DescribeAnomaly
 type DescribeInsightRulesInput struct {
 	_ struct{} `type:"structure"`
 
-	// This parameter is not currently used. Reserved for future use. If it is used
-	// in the future, the maximum value might be different.
+	// The maximum number of results to return in one operation. If you omit this
+	// parameter, the default of 500 is used.
 	MaxResults *int64 `min:"1" type:"integer"`
 
-	// Reserved for future use.
+	// Include this value, if it was returned by the previous operation, to get
+	// the next set of rules.
 	NextToken *string `type:"string"`
 }
 
@@ -4674,7 +4667,8 @@ type DescribeInsightRulesOutput struct {
 	// The rules returned by the operation.
 	InsightRules []*InsightRule `type:"list"`
 
-	// Reserved for future use.
+	// If this parameter is present, it is a token that marks the start of the next
+	// batch of returned results.
 	NextToken *string `type:"string"`
 }
 
@@ -4713,7 +4707,8 @@ type Dimension struct {
 	// Name is a required field
 	Name *string `min:"1" type:"string" required:"true"`
 
-	// The value of the dimension.
+	// The value of the dimension. Dimension values cannot contain blank spaces
+	// or non-ASCII characters.
 	//
 	// Value is a required field
 	Value *string `min:"1" type:"string" required:"true"`
@@ -5379,8 +5374,8 @@ type GetMetricDataInput struct {
 	// MetricDataQueries is a required field
 	MetricDataQueries []*MetricDataQuery `type:"list" required:"true"`
 
-	// Include this value, if it was returned by the previous call, to get the next
-	// set of data points.
+	// Include this value, if it was returned by the previous GetMetricData operation,
+	// to get the next set of data points.
 	NextToken *string `type:"string"`
 
 	// The order in which data points should be returned. TimestampDescending returns
@@ -6257,13 +6252,16 @@ func (s *ListDashboardsOutput) SetNextToken(v string) *ListDashboardsOutput {
 type ListMetricsInput struct {
 	_ struct{} `type:"structure"`
 
-	// The dimensions to filter against.
+	// The dimensions to filter against. Only the dimensions that match exactly
+	// will be returned.
 	Dimensions []*DimensionFilter `type:"list"`
 
-	// The name of the metric to filter against.
+	// The name of the metric to filter against. Only the metrics with names that
+	// match exactly will be returned.
 	MetricName *string `min:"1" type:"string"`
 
-	// The namespace to filter against.
+	// The metric namespace to filter against. Only the namespace that matches exactly
+	// will be returned.
 	Namespace *string `min:"1" type:"string"`
 
 	// The token returned by a previous call to indicate that there is more data
@@ -6610,7 +6608,7 @@ type MetricAlarm struct {
 	// An array of MetricDataQuery structures, used in an alarm based on a metric
 	// math expression. Each structure either retrieves a metric or performs a math
 	// expression. One item in the Metrics array is the math expression that the
-	// alarm watches. This expression by designated by having ReturnValue set to
+	// alarm watches. This expression by designated by having ReturnData set to
 	// true.
 	Metrics []*MetricDataQuery `type:"list"`
 
@@ -7400,8 +7398,6 @@ type PutAnomalyDetectorInput struct {
 	// the model. You can specify as many as 10 time ranges.
 	//
 	// The configuration can also include the time zone to use for the metric.
-	//
-	// You can in
 	Configuration *AnomalyDetectorConfiguration `type:"structure"`
 
 	// The metric dimensions to create the anomaly detection model for.
@@ -7527,7 +7523,7 @@ type PutCompositeAlarmInput struct {
 	// The actions to execute when this alarm transitions to the ALARM state from
 	// any other state. Each action is specified as an Amazon Resource Name (ARN).
 	//
-	// Valid Values: arn:aws:sns:region:account-id:sns-topic-name
+	// Valid Values: arn:aws:sns:region:account-id:sns-topic-name | arn:aws:ssm:region:account-id:opsitem:severity
 	AlarmActions []*string `type:"list"`
 
 	// The description for the composite alarm.
@@ -7939,6 +7935,7 @@ type PutMetricAlarmInput struct {
 	// Valid Values: arn:aws:automate:region:ec2:stop | arn:aws:automate:region:ec2:terminate
 	// | arn:aws:automate:region:ec2:recover | arn:aws:automate:region:ec2:reboot
 	// | arn:aws:sns:region:account-id:sns-topic-name | arn:aws:autoscaling:region:account-id:scalingPolicy:policy-id:autoScalingGroupName/group-friendly-name:policyName/policy-friendly-name
+	// | arn:aws:ssm:region:account-id:opsitem:severity
 	//
 	// Valid Values (for use with IAM roles): arn:aws:swf:region:account-id:action/actions/AWS_EC2.InstanceId.Stop/1.0
 	// | arn:aws:swf:region:account-id:action/actions/AWS_EC2.InstanceId.Terminate/1.0
@@ -8029,8 +8026,8 @@ type PutMetricAlarmInput struct {
 	// expression.
 	//
 	// One item in the Metrics array is the expression that the alarm watches. You
-	// designate this expression by setting ReturnValue to true for this object
-	// in the array. For more information, see MetricDataQuery (https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_MetricDataQuery.html).
+	// designate this expression by setting ReturnData to true for this object in
+	// the array. For more information, see MetricDataQuery (https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_MetricDataQuery.html).
 	//
 	// If you use the Metrics parameter, you cannot include the MetricName, Dimensions,
 	// Period, Namespace, Statistic, or ExtendedStatistic parameters of PutMetricAlarm
@@ -8086,6 +8083,11 @@ type PutMetricAlarmInput struct {
 	// Tags can help you organize and categorize your resources. You can also use
 	// them to scope user permissions by granting a user permission to access or
 	// change only resources with certain tag values.
+	//
+	// If you are using this operation to update an existing alarm, any tags you
+	// specify in this parameter are ignored. To change the tags of an existing
+	// alarm, use TagResource (https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_TagResource.html)
+	// or UntagResource (https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_UntagResource.html).
 	Tags []*Tag `type:"list"`
 
 	// The value against which the specified statistic is compared.

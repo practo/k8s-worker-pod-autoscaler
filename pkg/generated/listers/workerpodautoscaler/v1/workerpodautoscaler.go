@@ -26,8 +26,10 @@ import (
 )
 
 // WorkerPodAutoScalerLister helps list WorkerPodAutoScalers.
+// All objects returned here must be treated as read-only.
 type WorkerPodAutoScalerLister interface {
 	// List lists all WorkerPodAutoScalers in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.WorkerPodAutoScaler, err error)
 	// WorkerPodAutoScalers returns an object that can list and get WorkerPodAutoScalers.
 	WorkerPodAutoScalers(namespace string) WorkerPodAutoScalerNamespaceLister
@@ -58,10 +60,13 @@ func (s *workerPodAutoScalerLister) WorkerPodAutoScalers(namespace string) Worke
 }
 
 // WorkerPodAutoScalerNamespaceLister helps list and get WorkerPodAutoScalers.
+// All objects returned here must be treated as read-only.
 type WorkerPodAutoScalerNamespaceLister interface {
 	// List lists all WorkerPodAutoScalers in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.WorkerPodAutoScaler, err error)
 	// Get retrieves the WorkerPodAutoScaler from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.WorkerPodAutoScaler, error)
 	WorkerPodAutoScalerNamespaceListerExpansion
 }

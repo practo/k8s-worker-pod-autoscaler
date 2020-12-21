@@ -19,7 +19,7 @@ limitations under the License.
 package v1
 
 import (
-	wpav1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
@@ -67,7 +67,7 @@ func New(c rest.Interface) *K8sV1Client {
 }
 
 func setConfigDefaults(config *rest.Config) error {
-	gv := wpav1.SchemeGroupVersion
+	gv := v1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
 	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()

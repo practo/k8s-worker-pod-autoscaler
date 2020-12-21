@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -156,6 +158,8 @@ type WokerPodAutoScalerEvent struct {
 
 // Controller is the controller implementation for WorkerPodAutoScaler resources
 type Controller struct {
+	ctx context.Context
+
 	// kubeclientset is a standard kubernetes clientset
 	kubeclientset kubernetes.Interface
 	// customclientset is a clientset for our own API group
@@ -188,6 +192,7 @@ type Controller struct {
 
 // NewController returns a new sample controller
 func NewController(
+	ctx context.Context,
 	kubeclientset kubernetes.Interface,
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
@@ -207,6 +212,7 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
+		ctx:                        ctx,
 		kubeclientset:              kubeclientset,
 		customclientset:            customclientset,
 		deploymentLister:           deploymentInformer.Lister(),
@@ -254,6 +260,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	klog.V(1).Info("Starting workers")
 	// Launch two workers to process WorkerPodAutoScaler resources
 	for i := 0; i < threadiness; i++ {
+		// TOOD: move from stopCh to context, use: UntilWithContext()
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 	<-stopCh
@@ -266,13 +273,13 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 // processNextWorkItem function in order to read and process a message on the
 // workqueue.
 func (c *Controller) runWorker() {
-	for c.processNextWorkItem() {
+	for c.processNextWorkItem(c.ctx) {
 	}
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
-func (c *Controller) processNextWorkItem() bool {
+func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 	obj, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -306,7 +313,7 @@ func (c *Controller) processNextWorkItem() bool {
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
 		// WorkerPodAutoScaler resource to be synced.
-		if err := c.syncHandler(event); err != nil {
+		if err := c.syncHandler(ctx, event); err != nil {
 			// Put the item back on the workqueue to handle any transient errors.
 			c.workqueue.AddRateLimited(event)
 			return fmt.Errorf("error syncing '%s': %s, requeuing", event, err.Error())
@@ -328,7 +335,7 @@ func (c *Controller) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
 // with the current status of the resource.
-func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
+func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEvent) error {
 	now := time.Now()
 	key := event.key
 	// Convert the namespace/name string into a distinct namespace and name
@@ -468,15 +475,16 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 
 	if desiredWorkers != currentWorkers {
 		if deploymentName != "" {
-			c.updateDeployment(workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
+			c.updateDeployment(ctx, workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
 		} else {
-			c.updateReplicaSet(workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
+			c.updateReplicaSet(ctx, workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
 		}
 	}
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
 	updateWorkerPodAutoScalerStatus(
+		ctx,
 		name,
 		namespace,
 		c.customclientset,
@@ -502,7 +510,7 @@ func (c *Controller) syncHandler(event WokerPodAutoScalerEvent) error {
 }
 
 // updateDeployment updates the Deployment with the desired number of replicas
-func (c *Controller) updateDeployment(namespace string, deploymentName string, replicas *int32) {
+func (c *Controller) updateDeployment(ctx context.Context, namespace string, deploymentName string, replicas *int32) {
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version of the Deployment before attempting update
 		deployment, getErr := c.deploymentLister.Deployments(namespace).Get(deploymentName)
@@ -515,7 +523,7 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 		}
 
 		deployment.Spec.Replicas = replicas
-		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(deployment)
+		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 		if updateErr != nil {
 			klog.Errorf("Failed to update deployment: %v", updateErr)
 		}
@@ -527,7 +535,7 @@ func (c *Controller) updateDeployment(namespace string, deploymentName string, r
 }
 
 // updateReplicaSet updates the ReplicaSet with the desired number of replicas
-func (c *Controller) updateReplicaSet(namespace string, replicaSetName string, replicas *int32) {
+func (c *Controller) updateReplicaSet(ctx context.Context, namespace string, replicaSetName string, replicas *int32) {
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version of the ReplicaSet before attempting update
 		replicaSet, getErr := c.replicaSetLister.ReplicaSets(namespace).Get(replicaSetName)
@@ -540,7 +548,7 @@ func (c *Controller) updateReplicaSet(namespace string, replicaSetName string, r
 		}
 
 		replicaSet.Spec.Replicas = replicas
-		replicaSet, updateErr := c.kubeclientset.AppsV1().ReplicaSets(namespace).Update(replicaSet)
+		replicaSet, updateErr := c.kubeclientset.AppsV1().ReplicaSets(namespace).Update(ctx, replicaSet, metav1.UpdateOptions{})
 		if updateErr != nil {
 			klog.Errorf("Failed to update ReplicaSet: %v", updateErr)
 		}
@@ -742,6 +750,7 @@ func convertDesiredReplicasWithRules(
 }
 
 func updateWorkerPodAutoScalerStatus(
+	ctx context.Context,
 	name string,
 	namespace string,
 	customclientset clientset.Interface,
@@ -773,7 +782,7 @@ func updateWorkerPodAutoScalerStatus(
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := customclientset.K8sV1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).Update(workerPodAutoScalerCopy)
+	_, err := customclientset.K8sV1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).UpdateStatus(ctx, workerPodAutoScalerCopy, metav1.UpdateOptions{})
 	if err != nil {
 		klog.Errorf("Error updating wpa status, err: %v", err)
 		return
