@@ -248,6 +248,12 @@ $ make build
 making bin/darwin_amd64/workerpodautoscaler
 
 $ bin/darwin_amd64/workerpodautoscaler run --kube-config /home/user/.kube/config
+
+```
+
+- Generate CRD generated code at `pkg/apis` and `pkg/generated` using:
+```
+make generate
 ```
 
 - To add a new dependency use `go mod vendor`

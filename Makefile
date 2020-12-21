@@ -194,6 +194,9 @@ manifest-list: push
 version:
 	@echo $(VERSION)
 
+generate:
+	./hack/update-codegen.sh
+
 test: $(BUILD_DIRS)
 	@docker run                                                 \
 	    -i                                                      \
