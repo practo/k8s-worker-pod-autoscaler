@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -118,6 +119,9 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	hook := promlog.MustNewPrometheusHook("wpa_", klog.WarningSeverityLevel)
 	klog.AddHook(hook)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// // set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
@@ -183,7 +187,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		customClient, resyncPeriod, informers.WithNamespace(namespace))
 
 	controller := workerpodautoscalercontroller.NewController(
-		kubeClient, customClient,
+		ctx, kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
 		kubeInformerFactory.Apps().V1().ReplicaSets(),
 		customInformerFactory.K8s().V1().WorkerPodAutoScalers(),
