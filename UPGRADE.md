@@ -1,5 +1,18 @@
 # Upgrade Worker Pod Autoscaler
 
+## Upgrade from v1.2 to v1.3
+
+### Breaking changes
+Updates all the kubernetes dependencies with `v1.19`. It should work for the cluster with older versions, but Kubernetes supports patches and fixes for [last 3 minor releases](https://kubernetes.io/docs/setup/release/version-skew-policy/). It also updates the CRD definations.
+
+### Recommended Actions
+```
+kubectl apply -f ./artifacts/crd.yaml
+```
+### Changes
+- [v1.3.0](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.3.0)
+
+
 ## Upgrade from v1.1 to v1.2
 
 ### Breaking changes
