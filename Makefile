@@ -5,7 +5,7 @@ BIN := workerpodautoscaler
 UNIQUE:=$(shell date +%s)
 
 # Where to push the docker image.
-REGISTRY := practodev
+REGISTRY ?= practodev
 
 BASE_BRANCH := master
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
