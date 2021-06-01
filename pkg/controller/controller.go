@@ -64,7 +64,7 @@ var (
 			Namespace: "wpa",
 			Subsystem: "controller",
 			Name:      "loop_duration_seconds",
-			Help:      "Number of seconds to complete the control loop succesfully, partitioned by wpa name and namespace",
+			Help:      "Number of seconds to complete the control loop successfully, partitioned by wpa name and namespace",
 		},
 		[]string{"workerpodautoscaler", "namespace"},
 	)
@@ -74,7 +74,7 @@ var (
 			Namespace: "wpa",
 			Subsystem: "controller",
 			Name:      "loop_count_success",
-			Help:      "How many times the control loop executed succesfully, partitioned by wpa name and namespace",
+			Help:      "How many times the control loop executed successfully, partitioned by wpa name and namespace",
 		},
 		[]string{"workerpodautoscaler", "namespace"},
 	)
