@@ -68,8 +68,9 @@ func (p *Poller) Sync(stopCh <-chan struct{}) {
 			for key, status := range threadStatus {
 				if status == false {
 					delete(p.threads, key)
+				} else {
+					p.threads[key] = status
 				}
-				p.threads[key] = status
 			}
 		case <-stopCh:
 			klog.V(1).Info("Stopping sync thread of poller gracefully.")
