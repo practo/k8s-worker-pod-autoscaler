@@ -428,7 +428,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 
 	if queueMessages == queue.UnsyncedQueueMessageCount {
 		klog.Warningf(
-			"%s qMsgs: %d not uninitialized, waiting for init to complete",
+			"%s qMsgs: %d, q not initialized, waiting for init to complete",
 			queueName,
 			queueMessages,
 		)
