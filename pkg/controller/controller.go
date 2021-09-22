@@ -426,6 +426,15 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		return nil
 	}
 
+	if queueMessages == queue.UnsyncedQueueMessageCount {
+		klog.Warningf(
+			"%s qMsgs: %d, q not initialized, waiting for init to complete",
+			queueName,
+			queueMessages,
+		)
+		return nil
+	}
+
 	desiredWorkers := GetDesiredWorkers(
 		queueName,
 		queueMessages,
