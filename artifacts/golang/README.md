@@ -9,6 +9,6 @@ It keeps all the test dependencies installed on top of golang package
 
 ### Built using
 ```
-cd 1.16.4-alpine-test
+cd 1.17.1-alpine-test
 docker build -t practodev/golang:1.17.1-alpine-test .
 ```
