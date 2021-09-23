@@ -415,7 +415,8 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if err != nil {
 		aerr, ok := err.(awserr.Error)
 		if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-			klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+			klog.Errorf("Unable to find queue %q, %v. (checking after 20s)", queueSpec.name, err)
+			time.Sleep(20 * time.Second)
 			return
 		} else if ok && aerr.Code() == "RequestError" {
 			klog.Errorf("Unable to perform request get approximate messages %q, %v.",
