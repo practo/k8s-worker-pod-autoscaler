@@ -12,7 +12,7 @@ Currently the supported Message Queueing Services are:
 - [AWS SQS](https://aws.amazon.com/sqs/)
 - [Beanstalkd](https://beanstalkd.github.io/)
 
-There is a plan to integrate other commonly used message queuing services.
+Pull Requests are welcome to add new message queuing services.
 
 ----
 
