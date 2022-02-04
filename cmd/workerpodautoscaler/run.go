@@ -192,6 +192,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		kubeInformerFactory.Apps().V1().ReplicaSets(),
 		customInformerFactory.K8s().V1().WorkerPodAutoScalers(),
 		wpaDefaultMaxDisruption,
+                resyncPeriod,
 		queues,
 	)
 

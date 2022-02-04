@@ -199,6 +199,7 @@ func NewController(
 	replicaSetInformer appsinformers.ReplicaSetInformer,
 	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
 	defaultMaxDisruption string,
+        resyncPeriod time.Duration,
 	queues *queue.Queues) *Controller {
 
 	// Create event broadcaster
@@ -230,13 +231,13 @@ func NewController(
 	klog.V(4).Info("Setting up event handlers")
 
 	// Set up an event handler for when WorkerPodAutoScaler resources change
-	workerPodAutoScalerInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	workerPodAutoScalerInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueAddWorkerPodAutoScaler,
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueUpdateWorkerPodAutoScaler(new)
 		},
 		DeleteFunc: controller.enqueueDeleteWorkerPodAutoScaler,
-	})
+	}, resyncPeriod)
 	return controller
 }
 
