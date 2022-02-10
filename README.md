@@ -117,7 +117,6 @@ min=2, max=1000, current=500, maxDisruption=125: then the scale down cannot brin
 ## WPA Controller
 
 ```
-$ bin/darwin_amd64/workerpodautoscaler run --help
 Run the workerpodautoscaler
 
 Usage:
@@ -127,21 +126,22 @@ Examples:
   workerpodautoscaler run
 
 Flags:
-      --aws-regions string                  comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
-      --beanstalk-long-poll-interval int    the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive (default 20)
-      --beanstalk-short-poll-interval int   the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length (default 20)
-  -h, --help                                help for run
-      --k8s-api-burst int                   maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
-      --k8s-api-qps float                   qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
-      --kube-config string                  path of the kube config file, if not specified in cluster config is used
-      --metrics-port string                 specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
-      --namespace                           specify the namespace to listen to (default "" all namespaces)
-      --queue-services string               comma separated queue services, the WPA will start with (default "sqs,beanstalkd")
-      --resync-period int                   sync period for the worker pod autoscaler (default 20)
-      --sqs-long-poll-interval int          the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
-      --sqs-short-poll-interval int         the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
-      --wpa-default-max-disruption string   it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage. (default "100%")
-      --wpa-threads int                     wpa threadiness, number of threads to process wpa resources (default 10)
+      --aws-regions string                    comma separated aws regions of SQS (default "ap-south-1,ap-southeast-1")
+      --beanstalk-long-poll-interval int      the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive (default 20)
+      --beanstalk-short-poll-interval int     the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length (default 20)
+  -h, --help                                  help for run
+      --k8s-api-burst int                     maximum burst for throttle between requests from clients(wpa) to k8s api (default 10)
+      --k8s-api-qps float                     qps indicates the maximum QPS to the k8s api from the clients(wpa). (default 5)
+      --kube-config string                    path of the kube config file, if not specified in cluster config is used
+      --metrics-port string                   specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
+      --namespace string                      specify the namespace to listen to
+      --queue-services string                 comma separated queue services, the WPA will start with (default "sqs,beanstalkd")
+      --resync-period int                     sync period for the worker pod autoscaler (default 20)
+      --scale-down-delay-after-scale-up int   scale down delay after last scale up in seconds (default 600)
+      --sqs-long-poll-interval int            the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
+      --sqs-short-poll-interval int           the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
+      --wpa-default-max-disruption string     it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage. (default "100%")
+      --wpa-threads int                       wpa threadiness, number of threads to process wpa resources (default 10)
 
 Global Flags:
   -v, --v Level   number for the log level verbosity

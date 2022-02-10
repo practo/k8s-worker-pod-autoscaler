@@ -187,6 +187,11 @@ type Controller struct {
 	defaultMaxDisruption string
 	// QueueList keeps the list of all the queues in memeory
 	// which is used by the core controller and the sqs exporter
+
+	// scaleDownDelay after last scale up
+	// the no of seconds to wait after the last scale up before scaling down
+	scaleDownDelay time.Duration
+
 	Queues *queue.Queues
 }
 
@@ -199,7 +204,8 @@ func NewController(
 	replicaSetInformer appsinformers.ReplicaSetInformer,
 	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
 	defaultMaxDisruption string,
-        resyncPeriod time.Duration,
+	resyncPeriod time.Duration,
+	scaleDownDelay time.Duration,
 	queues *queue.Queues) *Controller {
 
 	// Create event broadcaster
@@ -225,6 +231,7 @@ func NewController(
 		workqueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "WorkerPodAutoScalers"),
 		recorder:                   recorder,
 		defaultMaxDisruption:       defaultMaxDisruption,
+		scaleDownDelay:             scaleDownDelay,
 		Queues:                     queues,
 	}
 
@@ -365,7 +372,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		// Get the Deployment with the name specified in WorkerPodAutoScaler.spec
 		deployment, err := c.deploymentLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("Deployment %s not found in namespace %s",
+			return fmt.Errorf("deployment %s not found in namespace %s",
 				deploymentName, workerPodAutoScaler.Namespace)
 		} else if err != nil {
 			return err
@@ -448,6 +455,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
+	klog.V(2).Infof("%s current: %d", queueName, currentWorkers)
 	klog.V(2).Infof("%s qMsgs: %d, desired: %d",
 		queueName, queueMessages, desiredWorkers)
 
@@ -483,13 +491,34 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		queueName,
 	).Set(float64(availableWorkers))
 
-	if desiredWorkers != currentWorkers {
+	lastScaleUpTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
+
+	op := GetScaleOperation(
+		queueName,
+		currentWorkers,
+		desiredWorkers,
+		lastScaleUpTime,
+		c.scaleDownDelay,
+	)
+
+	if op == ScaleUp || op == ScaleDown {
 		if deploymentName != "" {
-			c.updateDeployment(ctx, workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
+			c.updateDeployment(
+				ctx,
+				workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
 		} else {
-			c.updateReplicaSet(ctx, workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
+			c.updateReplicaSet(
+				ctx,
+				workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
 		}
 	}
+
+	if op == ScaleUp {
+		now := metav1.Now()
+		lastScaleUpTime = &now
+	}
+
+	klog.V(2).Infof("%s scaleOp: %v", queueName, scaleOpString(op))
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
@@ -503,6 +532,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		currentWorkers,
 		availableWorkers,
 		queueMessages,
+		lastScaleUpTime,
 	)
 
 	loopDurationSeconds.WithLabelValues(
@@ -525,7 +555,7 @@ func (c *Controller) updateDeployment(ctx context.Context, namespace string, dep
 		// Retrieve the latest version of the Deployment before attempting update
 		deployment, getErr := c.deploymentLister.Deployments(namespace).Get(deploymentName)
 		if errors.IsNotFound(getErr) {
-			return fmt.Errorf("Deployment %s was not found in namespace %s",
+			return fmt.Errorf("deployment %s was not found in namespace %s",
 				deploymentName, namespace)
 		}
 		if getErr != nil {
@@ -533,7 +563,7 @@ func (c *Controller) updateDeployment(ctx context.Context, namespace string, dep
 		}
 
 		deployment.Spec.Replicas = replicas
-		deployment, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+		_, updateErr := c.kubeclientset.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 		if updateErr != nil {
 			klog.Errorf("Failed to update deployment: %v", updateErr)
 		}
@@ -558,7 +588,7 @@ func (c *Controller) updateReplicaSet(ctx context.Context, namespace string, rep
 		}
 
 		replicaSet.Spec.Replicas = replicas
-		replicaSet, updateErr := c.kubeclientset.AppsV1().ReplicaSets(namespace).Update(ctx, replicaSet, metav1.UpdateOptions{})
+		_, updateErr := c.kubeclientset.AppsV1().ReplicaSets(namespace).Update(ctx, replicaSet, metav1.UpdateOptions{})
 		if updateErr != nil {
 			klog.Errorf("Failed to update ReplicaSet: %v", updateErr)
 		}
@@ -613,11 +643,7 @@ func getMinWorkers(
 }
 
 func isChangeTooSmall(desired int32, current int32, tolerance float64) bool {
-	if math.Abs(float64(desired-current))/float64(current) <= tolerance {
-		return true
-	}
-
-	return false
+	return math.Abs(float64(desired-current))/float64(current) <= tolerance
 }
 
 // GetDesiredWorkers finds the desired number of workers which are required
@@ -768,12 +794,14 @@ func updateWorkerPodAutoScalerStatus(
 	workerPodAutoScaler *v1.WorkerPodAutoScaler,
 	currentWorkers int32,
 	availableWorkers int32,
-	queueMessages int32) {
+	queueMessages int32,
+	lastScaleUpTime *metav1.Time) {
 
 	if workerPodAutoScaler.Status.CurrentReplicas == currentWorkers &&
 		workerPodAutoScaler.Status.AvailableReplicas == availableWorkers &&
 		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
-		workerPodAutoScaler.Status.CurrentMessages == queueMessages {
+		workerPodAutoScaler.Status.CurrentMessages == queueMessages &&
+		workerPodAutoScaler.Status.LastScaleTime.Equal(lastScaleUpTime) {
 		klog.V(4).Infof("%s/%s: WPA status is already up to date\n", namespace, name)
 		return
 	} else {
@@ -788,6 +816,7 @@ func updateWorkerPodAutoScalerStatus(
 	workerPodAutoScalerCopy.Status.AvailableReplicas = availableWorkers
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
+	workerPodAutoScalerCopy.Status.LastScaleTime = lastScaleUpTime
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
@@ -798,7 +827,6 @@ func updateWorkerPodAutoScalerStatus(
 		return
 	}
 	klog.V(4).Infof("%s/%s: Updated wpa status\n", namespace, name)
-	return
 }
 
 // getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name

@@ -34,6 +34,12 @@ type WorkerPodAutoScalerStatus struct {
 	CurrentReplicas   int32 `json:"CurrentReplicas"`
 	AvailableReplicas int32 `json:"AvailableReplicas"`
 	DesiredReplicas   int32 `json:"DesiredReplicas"`
+
+	// LastScaleTime is the last time the WorkerPodAutoscaler scaled the workers
+	// It is used by the autoscaler to control
+	// how often the number of pods is changed.
+	// +optional
+	LastScaleTime *metav1.Time `json:"LastScaleTime,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

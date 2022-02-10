@@ -19,6 +19,7 @@ import (
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/signals"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	workerpodautoscalercontroller "github.com/practo/k8s-worker-pod-autoscaler/pkg/controller"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
@@ -47,6 +48,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags := v.Cmd.Flags()
 
 	flagNames := []string{
+		"scale-down-delay-after-scale-up",
 		"resync-period",
 		"wpa-threads",
 		"wpa-default-max-disruption",
@@ -63,6 +65,7 @@ func (v *runCmd) new() *cobra.Command {
 		"namespace",
 	}
 
+	flags.Int("scale-down-delay-after-scale-up", 600, "scale down delay after last scale up in seconds")
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
 	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
 	flags.String("wpa-default-max-disruption", "100%", "it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage.")
@@ -73,7 +76,6 @@ func (v *runCmd) new() *cobra.Command {
 	flags.Int("beanstalk-short-poll-interval", 20, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
 	flags.Int("beanstalk-long-poll-interval", 20, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
 	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
-
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
 	flags.Float64("k8s-api-qps", 5.0, "qps indicates the maximum QPS to the k8s api from the clients(wpa).")
 	flags.Int("k8s-api-burst", 10, "maximum burst for throttle between requests from clients(wpa) to k8s api")
@@ -99,8 +101,12 @@ func parseRegions(regionNames string) []string {
 }
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
+	scaleDownDelay := time.Second * time.Duration(
+		viper.GetInt("scale-down-delay-after-scale-up"),
+	)
 	resyncPeriod := time.Second * time.Duration(
-		v.Viper.GetInt("resync-period"))
+		v.Viper.GetInt("resync-period"),
+	)
 	wpaThraeds := v.Viper.GetInt("wpa-threads")
 	wpaDefaultMaxDisruption := v.Viper.GetString("wpa-default-max-disruption")
 	awsRegions := parseRegions(v.Viper.GetString("aws-regions"))
@@ -192,7 +198,8 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		kubeInformerFactory.Apps().V1().ReplicaSets(),
 		customInformerFactory.K8s().V1().WorkerPodAutoScalers(),
 		wpaDefaultMaxDisruption,
-                resyncPeriod,
+		resyncPeriod,
+		scaleDownDelay,
 		queues,
 	)
 
@@ -210,7 +217,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	if err = controller.Run(wpaThraeds, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
-	return
 }
 
 func serveMetrics(metricsPort string) {
