@@ -22,12 +22,12 @@ func GetScaleOperation(
 	lastScaleTime *metav1.Time,
 	scaleDownDelay time.Duration) ScaleOperation {
 
-	if desiredWorkers == currentWorkers {
-		return ScaleNoop
-	}
-
 	if desiredWorkers > currentWorkers {
 		return ScaleUp
+	}
+
+	if desiredWorkers == currentWorkers {
+		return ScaleNoop
 	}
 
 	if canScaleDown(
