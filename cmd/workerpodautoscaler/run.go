@@ -48,7 +48,7 @@ func (v *runCmd) new() *cobra.Command {
 	flags := v.Cmd.Flags()
 
 	flagNames := []string{
-		"scale-down-delay-after-scale-up",
+		"scale-down-delay-after-last-scale-activity",
 		"resync-period",
 		"wpa-threads",
 		"wpa-default-max-disruption",
@@ -65,7 +65,7 @@ func (v *runCmd) new() *cobra.Command {
 		"namespace",
 	}
 
-	flags.Int("scale-down-delay-after-scale-up", 600, "scale down delay after last scale up in seconds")
+	flags.Int("scale-down-delay-after-last-scale-activity", 600, "scale down delay after last scale up or down in seconds")
 	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
 	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
 	flags.String("wpa-default-max-disruption", "100%", "it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage.")
@@ -102,7 +102,7 @@ func parseRegions(regionNames string) []string {
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	scaleDownDelay := time.Second * time.Duration(
-		viper.GetInt("scale-down-delay-after-scale-up"),
+		viper.GetInt("scale-down-delay-after-last-scale-activity"),
 	)
 	resyncPeriod := time.Second * time.Duration(
 		v.Viper.GetInt("resync-period"),

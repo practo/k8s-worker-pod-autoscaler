@@ -117,6 +117,7 @@ min=2, max=1000, current=500, maxDisruption=125: then the scale down cannot brin
 ## WPA Controller
 
 ```
+$ bin/darwin_amd64/workerpodautoscaler run --help
 Run the workerpodautoscaler
 
 Usage:

@@ -511,9 +511,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 				ctx,
 				workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
 		}
-	}
 
-	if op == ScaleUp {
 		now := metav1.Now()
 		lastScaleUpTime = &now
 	}
