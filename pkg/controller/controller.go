@@ -495,8 +495,8 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 
 	op := GetScaleOperation(
 		queueName,
-		currentWorkers,
 		desiredWorkers,
+		currentWorkers,
 		lastScaleUpTime,
 		c.scaleDownDelay,
 	)
