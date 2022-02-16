@@ -1,4 +1,4 @@
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   name: workerpodautoscalers.k8s.practo.dev
@@ -13,68 +13,67 @@ spec:
     - wpas
     singular: workerpodautoscaler
   scope: Namespaced
-  subresources:
-    status: {}
-  validation:
-    openAPIV3Schema:
-      type: object
-      required:
-      - spec
-      properties:
-        apiVersion:
-          type: string
-        kind:
-          type: string
-        metadata:
-          type: object
-        spec:
-          type: object
-          required:
-          - minReplicas
-          - maxReplicas
-          - queueURI
-          - targetMessagesPerWorker
-          oneOf:
-          - required:
-            - deploymentName
-          - required:
-            - replicaSetName
-          properties:
-            deploymentName:
-              type: string
-              description: 'Name of the Kubernetes Deployment in the same namespace as WPA object'
-            replicaSetName:
-              type: string
-              description: 'Name of the Kubernetes ReplicaSet in the same namespace as WPA object'
-            maxDisruption:
-              type: string
-              nullable: true
-              description: 'Amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity'
-            maxReplicas:
-              type: integer
-              format: int32
-              description: 'Maximum number of workers you want to run'
-            minReplicas:
-              type: integer
-              format: int32
-              description: 'Minimum number of workers you want to run'
-            queueURI:
-              type: string
-              description: 'Full URL of the queue'
-            targetMessagesPerWorker:
-              type: integer
-              format: int32
-              description: 'Target ratio between the number of queued jobs(both available and reserved) and the number of workers required to process them. For long running workers with visible backlog, this value may be set to 1 so that each job spawns a new worker (upto maxReplicas)'
-            secondsToProcessOneJob:
-              type: number
-              format: float
-              nullable: true
-              description: 'For fast running workers doing high RPM, the backlog is very close to zero. So for such workers scale up cannot happen based on the backlog, hence this is a really important specification to always keep the minimum number of workers running based on the queue RPM. (highly recommended, default=0.0 i.e. disabled).'
-  version: v1
   versions:
   - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            type: object
+            required:
+            - minReplicas
+            - maxReplicas
+            - queueURI
+            - targetMessagesPerWorker
+            oneOf:
+            - required:
+              - deploymentName
+            - required:
+              - replicaSetName
+            properties:
+              deploymentName:
+                type: string
+                description: 'Name of the Kubernetes Deployment in the same namespace as WPA object'
+              replicaSetName:
+                type: string
+                description: 'Name of the Kubernetes ReplicaSet in the same namespace as WPA object'
+              maxDisruption:
+                type: string
+                nullable: true
+                description: 'Amount of disruption that can be tolerated in a single scale down activity. Number of pods or percentage of pods that can scale down in a single down scale down activity'
+              maxReplicas:
+                type: integer
+                format: int32
+                description: 'Maximum number of workers you want to run'
+              minReplicas:
+                type: integer
+                format: int32
+                description: 'Minimum number of workers you want to run'
+              queueURI:
+                type: string
+                description: 'Full URL of the queue'
+              targetMessagesPerWorker:
+                type: integer
+                format: int32
+                description: 'Target ratio between the number of queued jobs(both available and reserved) and the number of workers required to process them. For long running workers with visible backlog, this value may be set to 1 so that each job spawns a new worker (upto maxReplicas)'
+              secondsToProcessOneJob:
+                type: number
+                format: float
+                nullable: true
+                description: 'For fast running workers doing high RPM, the backlog is very close to zero. So for such workers scale up cannot happen based on the backlog, hence this is a really important specification to always keep the minimum number of workers running based on the queue RPM. (highly recommended, default=0.0 i.e. disabled).'
     served: true
     storage: true
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""
