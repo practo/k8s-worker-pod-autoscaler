@@ -491,13 +491,13 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		queueName,
 	).Set(float64(availableWorkers))
 
-	lastScaleUpTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
+	lastScaleTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
 
 	op := GetScaleOperation(
 		queueName,
 		desiredWorkers,
 		currentWorkers,
-		lastScaleUpTime,
+		lastScaleTime,
 		c.scaleDownDelay,
 	)
 
@@ -513,7 +513,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		}
 
 		now := metav1.Now()
-		lastScaleUpTime = &now
+		lastScaleTime = &now
 	}
 
 	klog.V(2).Infof("%s scaleOp: %v", queueName, scaleOpString(op))
@@ -530,7 +530,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		currentWorkers,
 		availableWorkers,
 		queueMessages,
-		lastScaleUpTime,
+		lastScaleTime,
 	)
 
 	loopDurationSeconds.WithLabelValues(
@@ -793,13 +793,13 @@ func updateWorkerPodAutoScalerStatus(
 	currentWorkers int32,
 	availableWorkers int32,
 	queueMessages int32,
-	lastScaleUpTime *metav1.Time) {
+	lastScaleTime *metav1.Time) {
 
 	if workerPodAutoScaler.Status.CurrentReplicas == currentWorkers &&
 		workerPodAutoScaler.Status.AvailableReplicas == availableWorkers &&
 		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
 		workerPodAutoScaler.Status.CurrentMessages == queueMessages &&
-		workerPodAutoScaler.Status.LastScaleTime.Equal(lastScaleUpTime) {
+		workerPodAutoScaler.Status.LastScaleTime.Equal(lastScaleTime) {
 		klog.V(4).Infof("%s/%s: WPA status is already up to date\n", namespace, name)
 		return
 	} else {
@@ -814,7 +814,7 @@ func updateWorkerPodAutoScalerStatus(
 	workerPodAutoScalerCopy.Status.AvailableReplicas = availableWorkers
 	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
 	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
-	workerPodAutoScalerCopy.Status.LastScaleTime = lastScaleUpTime
+	workerPodAutoScalerCopy.Status.LastScaleTime = lastScaleTime
 	// If the CustomResourceSubresources feature gate is not enabled,
 	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
