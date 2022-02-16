@@ -136,7 +136,7 @@ Flags:
       --metrics-port string                              specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA (default ":8787")
       --namespace string                                 specify the namespace to listen to
       --queue-services string                            comma separated queue services, the WPA will start with (default "sqs,beanstalkd")
-      --resync-period int                                sync period for the worker pod autoscaler (default 20)
+      --resync-period int                                maximum sync period for the control loop but the control loop can execute sooner if the wpa status object gets updated. (default 20)
       --scale-down-delay-after-last-scale-activity int   scale down delay after last scale up or down in seconds (default 600)
       --sqs-long-poll-interval int                       the duration (in seconds) for which the sqs receive message call waits for a message to arrive (default 20)
       --sqs-short-poll-interval int                      the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
