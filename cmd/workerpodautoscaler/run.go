@@ -19,7 +19,6 @@ import (
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/signals"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	workerpodautoscalercontroller "github.com/practo/k8s-worker-pod-autoscaler/pkg/controller"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
@@ -102,7 +101,7 @@ func parseRegions(regionNames string) []string {
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	scaleDownDelay := time.Second * time.Duration(
-		viper.GetInt("scale-down-delay-after-last-scale-activity"),
+		v.Viper.GetInt("scale-down-delay-after-last-scale-activity"),
 	)
 	resyncPeriod := time.Second * time.Duration(
 		v.Viper.GetInt("resync-period"),
