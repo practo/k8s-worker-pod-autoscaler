@@ -65,7 +65,7 @@ func (v *runCmd) new() *cobra.Command {
 	}
 
 	flags.Int("scale-down-delay-after-last-scale-activity", 600, "scale down delay after last scale up or down in seconds")
-	flags.Int("resync-period", 20, "sync period for the worker pod autoscaler")
+	flags.Int("resync-period", 20, "maximum sync period for the control loop but the control loop can execute sooner if the wpa status object gets updated.")
 	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
 	flags.String("wpa-default-max-disruption", "100%", "it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage.")
 	flags.String("aws-regions", "ap-south-1,ap-southeast-1", "comma separated aws regions of SQS")
