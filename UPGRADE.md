@@ -1,10 +1,19 @@
 # Upgrade Worker Pod Autoscaler
 
+## Upgrade from v1.5 to v1.6
+Refer changelog. Can be safely upgraded. Just a note the CRD version was changed to use v1 for kubernetes 1.22+ support. More [Info](https://github.com/practo/k8s-worker-pod-autoscaler/pull/142).
+### Breaking changes.
+None
+### Recommeded actions
+None
+### Changes
+- [v1.6.0](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.6.0)
+
 ## Upgrade from v1.4 to v1.5
 Refer changelog. Can be safely updated to v1.5 from v1.4
 ### Breaking changes
 None
-### Recommended Actions
+### Recommended actions
 None
 ### Changes
 - [v1.5.0](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.5.0)
@@ -15,7 +24,7 @@ Updates all the kubernetes dependencies with `v1.20`. It should work for the clu
 ### Breaking changes
 None
 
-### Recommended Actions
+### Recommended actions
 None
 
 ### Changes
@@ -26,7 +35,7 @@ None
 ### Breaking changes
 Updates all the kubernetes dependencies with `v1.19`. It should work for the cluster with older versions, but Kubernetes supports patches and fixes for [last 3 minor releases](https://kubernetes.io/docs/setup/release/version-skew-policy/). It also updates the CRD definitions.
 
-### Recommended Actions
+### Recommended actions
 ```
 kubectl apply -f ./artifacts/crd.yaml
 ```
@@ -39,7 +48,7 @@ kubectl apply -f ./artifacts/crd.yaml
 ### Breaking changes
 `v1alpha1` was discontinued. Please move to `v1`.
 
-### Recommended Actions
+### Recommended actions
 ```
 kubectl apply -f ./artifacts/crd.yaml
 ```
@@ -48,10 +57,10 @@ kubectl apply -f ./artifacts/crd.yaml
 
 ## Upgrade from v1.0 to v1.1
 
-### Breaking Changes
+### Breaking changes
 There is no backward breaking change from `v1.0` to `v1.1`.
 
-### Recommended Actions
+### Recommended actions
 Update the WorkerPodAutoScaler Clusterrole to give WPA access to fetch Replicaset and also the CRD.
 ```
 kubectl apply -f ./artifacts/clusterrole.yaml
@@ -65,10 +74,10 @@ Note: Support for `v1alpha1` will be discontinued from `v1.2`.
 
 ## Upgrade from v0.2 to v1.0
 
-### Breaking Changes
+### Breaking changes
 There is no backward breaking change from `v0.2` to `v1`.
 
-### Recommended Actions
+### Recommended actions
 Update the WorkerPodAutoScaler CRD from `v1alpha1` to `v1` using below:
 ```
 kubectl apply -f ./artifacts/crd.yaml
