@@ -26,7 +26,7 @@ MAJOR_MINOR_VERSION = $(shell git describe --tags  --dirty | \
 # directories which hold app source (not vendored)
 SRC_DIRS := cmd pkg/cmdutil pkg/controller pkg/queue pkg/signals pkg/version
 
-ALL_PLATFORMS := darwin/amd64 linux/amd64
+ALL_PLATFORMS := darwin/amd64 linux/amd64 linux/arm64
 # linux/arm linux/arm64 linux/ppc64le linux/s390x
 
 # Used internally.  Users should pass GOOS and/or GOARCH.
