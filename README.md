@@ -220,7 +220,7 @@ git pull origin master
 
 ```
 
-- Build and push the image to `hub.docker.com/practodev` or `public.ecr.aws/practo`. Note: dokcerhub or ECR push access is required or use a custom registry by adding `REGISTRY=public.ecr.aws/exampleorg make push`
+- Build and push the image to `public.ecr.aws/practo`. Note: ECR push access is required or use a custom registry by adding `REGISTRY=public.ecr.aws/exampleorg make push`
 ```
 git fetch --tags
 git tag v1.6.0

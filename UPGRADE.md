@@ -19,7 +19,7 @@ None
 - [v1.5.0](https://github.com/practo/k8s-worker-pod-autoscaler/releases/tag/v1.5.0)
 
 ## Upgrade from v1.3 to v1.4
-Updates all the kubernetes dependencies with `v1.20`. It should work for the cluster with older versions as well. Also with this release images are available in prato's public ECR as `public.ecr.aws/practo/workerpodautoscaler:v1.3.0`. Default is still practodev.
+Updates all the kubernetes dependencies with `v1.20`. It should work for the cluster with older versions as well. Also with this release images are available in practo's public ECR as `public.ecr.aws/practo/workerpodautoscaler:v1.3.0`.
 
 ### Breaking changes
 None
