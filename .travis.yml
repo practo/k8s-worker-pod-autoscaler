@@ -5,5 +5,5 @@ script:
 - make build
 - test -f bin/linux_amd64/workerpodautoscaler
 - make all-container
-- docker images | grep "^practodev/workerpodautoscaler"
+- docker images | grep "^public.ecr.aws/practo/workerpodautoscaler"
 - make test

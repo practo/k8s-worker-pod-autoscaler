@@ -5,7 +5,7 @@ BIN := workerpodautoscaler
 UNIQUE:=$(shell date +%s)
 
 # Where to push the docker image.
-REGISTRY ?= practodev
+REGISTRY ?= public.ecr.aws/practo
 
 BASE_BRANCH := master
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
@@ -61,7 +61,7 @@ define \n
 endef
 
 BUILD_IMAGE ?= golang:1.17.1-alpine
-TEST_IMAGE ?= practodev/golang:1.17.1-alpine-test
+TEST_IMAGE ?= public.ecr.aws/practo/golang:1.17.1-alpine-test
 
 # If you want to build all binaries, see the 'all-build' rule.
 # If you want to build all containers, see the 'all-container' rule.
