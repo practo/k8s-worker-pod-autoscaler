@@ -181,7 +181,7 @@ github.com/practo/klog/v2
 # github.com/practo/promlog v1.0.0
 ## explicit; go 1.14
 github.com/practo/promlog
-# github.com/prometheus/client_golang v1.11.0
+# github.com/prometheus/client_golang v1.11.1
 ## explicit; go 1.13
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
