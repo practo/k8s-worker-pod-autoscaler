@@ -3,16 +3,16 @@ kind: Deployment
 metadata:
   name: workerpodautoscaler
   labels:
-    app: workerpodautoscaler
+    {{- include "worker-pod-autoscaler.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: workerpodautoscaler
+      {{- include "worker-pod-autoscaler.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: workerpodautoscaler
+        {{- include "worker-pod-autoscaler.labels" . | nindent 8 }}
     spec:
       serviceAccountName: workerpodautoscaler
       tolerations:
