@@ -10,5 +10,5 @@ roleRef:
   name: workerpodautoscaler
 subjects:
 - kind: ServiceAccount
-  name: workerpodautoscaler
+  name: {{ .Values.serviceAccount.name }}
   namespace: {{ .Release.Namespace }}

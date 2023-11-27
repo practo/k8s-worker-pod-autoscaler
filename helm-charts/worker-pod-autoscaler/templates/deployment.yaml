@@ -14,7 +14,7 @@ spec:
       labels:
         {{- include "worker-pod-autoscaler.labels" . | nindent 8 }}
     spec:
-      serviceAccountName: workerpodautoscaler
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       tolerations:
       - effect: NoExecute
         operator: Exists

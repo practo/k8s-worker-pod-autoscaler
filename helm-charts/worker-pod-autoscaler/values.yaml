@@ -6,3 +6,7 @@ awsAccessKeyId: ""
 awsSecretAccessKey: ""
 awsRegions:
   - us-east-1
+
+serviceAccount:
+  name: workerpodautoscaler
+  annotations: {}
