@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: workerpodautoscaler
-  namespace: kube-system
   labels:
     app: workerpodautoscaler
 spec:
