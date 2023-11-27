@@ -24,18 +24,22 @@ spec:
      containers:
      - name: wpa
        env:
+       {{- if .Values.awsAccessKeyId -}}
        - name: AWS_ACCESS_KEY_ID
-         value: {{ WPA_AWS_ACCESS_KEY_ID }}
+         value: {{ .Values.awsAccessKeyId }}
+       {{- end }}
+       {{- if .Values.awsSecretAccessKey -}}
        - name: AWS_SECRET_ACCESS_KEY
-         value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: public.ecr.aws/practo/workerpodautoscaler:{{ WPA_TAG }}
+         value: {{ .Values.awsSecretAccessKey }}
+       {{- end }}
+       image: public.ecr.aws/practo/workerpodautoscaler:v{{ default .Chart.AppVersion }}
        imagePullPolicy: Always
        command:
        - /workerpodautoscaler
        - run
        - --resync-period=20
        - --wpa-threads=10
-       - --aws-regions={{ WPA_AWS_REGIONS }}
+       - --aws-regions={{ include "worker-pod-autoscaler.awsRegions" . }}
        - --sqs-short-poll-interval=20
        - --sqs-long-poll-interval=20
        - --k8s-api-qps=5.0
