@@ -18,7 +18,7 @@ Pull Requests are welcome to add new message queuing services.
 
 # Install the WorkerPodAutoscaler
 
-### Install
+### Install via Script
 Running the below script will create the WPA [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and install the worker pod autoscaler deployment.
 
 ```bash
@@ -29,6 +29,15 @@ export AWS_SECRET_ACCESS_KEY='sample-aws-secret-acesss-key'
 ```
 
 Note: `AWS_` variables needs to exported only when using SQS and the node role in which the WPA pod runs do not have the [required IAM Policy](artifacts/iam-policy.json).
+
+### Install via Helm
+
+```sh
+helm install wpa helm-charts/worker-pod-autoscaler \
+  --set-json awsRegions='["ap-south-1","ap-southeast-1"]' \
+  --set awsAccessKeyId='sample-aws-access-key-id' \
+  --set awsSecretAccessKey='sample-aws-secret-acesss-key'
+```
 
 ### Verify Installation
 Check the wpa resource is accessible using kubectl
