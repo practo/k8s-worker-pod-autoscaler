@@ -10,3 +10,8 @@ awsRegions:
 serviceAccount:
   name: workerpodautoscaler
   annotations: {}
+
+image:
+  repository: public.ecr.aws/practo/workerpodautoscaler
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""

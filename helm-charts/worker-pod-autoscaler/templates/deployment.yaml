@@ -31,7 +31,7 @@ spec:
         - name: AWS_SECRET_ACCESS_KEY
           value: {{ .Values.awsSecretAccessKey }}
         {{- end }}
-        image: public.ecr.aws/practo/workerpodautoscaler:v{{ default .Chart.AppVersion }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default (printf "v%s" .Chart.AppVersion) }}"
         imagePullPolicy: Always
         command:
         - /workerpodautoscaler
