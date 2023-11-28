@@ -6,6 +6,9 @@ awsAccessKeyId: ""
 awsSecretAccessKey: ""
 awsRegions:
   - us-east-1
+queueServices:
+  - sqs
+  - beanstalkd
 
 serviceAccount:
   name: workerpodautoscaler

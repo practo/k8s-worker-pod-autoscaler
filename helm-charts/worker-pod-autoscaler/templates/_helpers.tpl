@@ -64,3 +64,7 @@ Create the name of the service account to use
 {{- define "worker-pod-autoscaler.awsRegions" -}}
 {{- join "," .Values.awsRegions }}
 {{- end -}}
+
+{{- define "worker-pod-autoscaler.queueServices" -}}
+{{- join "," .Values.queueServices }}
+{{- end -}}
