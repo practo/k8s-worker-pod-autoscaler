@@ -45,7 +45,7 @@ spec:
         - --k8s-api-burst=10
         - --wpa-default-max-disruption=100%
         - --queue-services={{ include "worker-pod-autoscaler.queueServices" . }}
-        - -v=2
+        - -v={{ .Values.logLevel }}
         resources:
           limits:
             cpu: 100m

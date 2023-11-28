@@ -9,6 +9,7 @@ awsRegions:
 queueServices:
   - sqs
   - beanstalkd
+logLevel: 2
 
 serviceAccount:
   name: workerpodautoscaler
