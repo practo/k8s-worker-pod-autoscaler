@@ -32,7 +32,7 @@ spec:
           value: {{ .Values.awsSecretAccessKey }}
         {{- end }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default (printf "v%s" .Chart.AppVersion) }}"
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         command:
         - /workerpodautoscaler
         - run
