@@ -58,9 +58,11 @@ spec:
                 type: integer
                 format: int32
                 description: 'Minimum number of workers you want to run'
-              queueURI:
-                type: string
-                description: 'Full URL of the queue'
+              queueURIs:
+                type: array
+                items:
+                  type: string
+                  description: 'Full URL of the queue'
               targetMessagesPerWorker:
                 type: integer
                 format: int32

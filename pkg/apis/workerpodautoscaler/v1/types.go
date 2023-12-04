@@ -21,7 +21,7 @@ type WorkerPodAutoScalerSpec struct {
 	MinReplicas             *int32   `json:"minReplicas"`
 	MaxReplicas             *int32   `json:"maxReplicas"`
 	MaxDisruption           *string  `json:"maxDisruption,omitempty"`
-	QueueURI                string   `json:"queueURI"`
+	QueueURIs               []string `json:"queueURIs"`
 	DeploymentName          string   `json:"deploymentName,omitempty"`
 	ReplicaSetName          string   `json:"replicaSetName,omitempty"`
 	TargetMessagesPerWorker *int32   `json:"targetMessagesPerWorker"`
