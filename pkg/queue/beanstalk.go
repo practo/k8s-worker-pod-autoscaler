@@ -338,7 +338,7 @@ func (b *Beanstalk) GetName() string {
 }
 
 func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
-	if queueSpec.workers == 0 && queueSpec.messages == 0 {
+	if queueSpec.workers == 0 && queueSpec.Messages == 0 {
 		// If there are no workers running we do a long poll to find a job(s)
 		// in the queue. On finding job(s) we increment the queue message
 		// by no of messages received to trigger scale up.
@@ -349,7 +349,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 		}
 		if err != nil {
 			klog.Errorf("Unable to perform request long polling %q, %v.",
-				queueSpec.name, err)
+				queueSpec.Name, err)
 			b.reestablishConn(queueSpec.uri)
 			return
 		}
@@ -360,7 +360,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	}
 
 	// TODO: beanstalk does not support secondsToProcessOneJob at present
-	if queueSpec.secondsToProcessOneJob != 0.0 {
+	if queueSpec.SecondsToProcessOneJob != 0.0 {
 		// TODO: this should be uncommented when getAverageNumberOfMessagesSent
 		// comes live
 		// messagesSentPerMinute, err := b.getAverageNumberOfMessagesSent(queueSpec.uri)
@@ -375,11 +375,11 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	approxMessages, approxMessagesNotVisible, err := b.getMessages(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to get approximate messages in queue %q, %v.",
-			queueSpec.name, err)
+			queueSpec.Name, err)
 		b.reestablishConn(queueSpec.uri)
 		return
 	}
-	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
+	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.Name, approxMessages)
 	b.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 
 	if approxMessages != 0 {
@@ -395,7 +395,7 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	klog.V(4).Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
 
 	if approxMessagesNotVisible > 0 {
-		klog.V(3).Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
+		klog.V(3).Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.Name)
 		b.waitForShortPollInterval()
 		return
 	}
@@ -403,14 +403,14 @@ func (b *Beanstalk) poll(key string, queueSpec QueueSpec) {
 	idleWorkers, err := b.getIdleWorkers(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to fetch idle workers %q, %v.",
-			queueSpec.name, err)
+			queueSpec.Name, err)
 		b.reestablishConn(queueSpec.uri)
 		time.Sleep(100 * time.Millisecond)
 		return
 	}
 
 	klog.V(3).Infof("%s: workers=%d, idleWorkers=%d",
-		queueSpec.name,
+		queueSpec.Name,
 		queueSpec.workers,
 		idleWorkers,
 	)

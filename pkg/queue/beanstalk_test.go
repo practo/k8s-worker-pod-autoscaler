@@ -42,10 +42,10 @@ func buildQueues(
 	for _, spec := range queueSpecs {
 		queues.Add(
 			spec.namespace,
-			spec.name,
-			getQueueURI(spec.namespace, spec.name),
+			spec.Name,
+			getQueueURI(spec.namespace, spec.Name),
 			spec.workers,
-			spec.secondsToProcessOneJob,
+			spec.SecondsToProcessOneJob,
 		)
 		<-doneChan
 	}
@@ -69,15 +69,15 @@ func TestPollSyncWhenNoMessagesInQueue(t *testing.T) {
 
 	queueSpecs := []QueueSpec{
 		QueueSpec{
-			name:                   "otpsender",
+			Name:                   "otpsender",
 			namespace:              "testns",
 			workers:                0,
-			secondsToProcessOneJob: 0.0,
+			SecondsToProcessOneJob: 0.0,
 		},
 	}
 	messages := int32(0)
 	reserved := int32(0)
-	name := queueSpecs[0].name
+	name := queueSpecs[0].Name
 	namespace := queueSpecs[0].namespace
 	queueURI := getQueueURI(namespace, name)
 	queues, poller, err := buildQueues(doneChan, queueSpecs)
@@ -85,7 +85,7 @@ func TestPollSyncWhenNoMessagesInQueue(t *testing.T) {
 	if err != nil {
 		klog.Fatalf("error setting up beanstalk test: %v\n", err)
 	}
-	key := getKey(namespace, name)
+	key := getMultiQueueKey(namespace, name, "")
 	queues.updateMessage(key, messages)
 	<-doneChan
 
@@ -107,7 +107,7 @@ func TestPollSyncWhenNoMessagesInQueue(t *testing.T) {
 	<-doneChan
 
 	nameGot, messagesGot, messagesPerMinGot, idleGot := queues.GetQueueInfo(
-		namespace, name,
+		namespace, name, "",
 	)
 
 	if name != nameGot {
@@ -139,15 +139,15 @@ func TestPollSyncWhenMessagesInQueue(t *testing.T) {
 
 	queueSpecs := []QueueSpec{
 		QueueSpec{
-			name:                   "otpsender",
+			Name:                   "otpsender",
 			namespace:              "testns",
 			workers:                0,
-			secondsToProcessOneJob: 0.0,
+			SecondsToProcessOneJob: 0.0,
 		},
 	}
 	messages := int32(25)
 	reserved := int32(0)
-	name := queueSpecs[0].name
+	name := queueSpecs[0].Name
 	namespace := queueSpecs[0].namespace
 	queueURI := getQueueURI(namespace, name)
 	queues, poller, err := buildQueues(doneChan, queueSpecs)
@@ -155,7 +155,7 @@ func TestPollSyncWhenMessagesInQueue(t *testing.T) {
 	if err != nil {
 		klog.Fatalf("error setting up beanstalk test: %v\n", err)
 	}
-	key := getKey(namespace, name)
+	key := getMultiQueueKey(namespace, name, "")
 	queues.updateMessage(key, messages)
 	<-doneChan
 
@@ -177,7 +177,7 @@ func TestPollSyncWhenMessagesInQueue(t *testing.T) {
 	<-doneChan
 
 	nameGot, messagesGot, messagesPerMinGot, idleGot := queues.GetQueueInfo(
-		namespace, name,
+		namespace, name, "",
 	)
 
 	if name != nameGot {
@@ -209,15 +209,15 @@ func TestPollSyncWhenNoMessagesInQueueButMessagesAreInFlight(t *testing.T) {
 
 	queueSpecs := []QueueSpec{
 		QueueSpec{
-			name:                   "otpsender",
+			Name:                   "otpsender",
 			namespace:              "testns",
 			workers:                10,
-			secondsToProcessOneJob: 0.0,
+			SecondsToProcessOneJob: 0.0,
 		},
 	}
 	messages := int32(0)
 	reserved := int32(5)
-	name := queueSpecs[0].name
+	name := queueSpecs[0].Name
 	namespace := queueSpecs[0].namespace
 	queueURI := getQueueURI(namespace, name)
 	queues, poller, err := buildQueues(doneChan, queueSpecs)
@@ -225,7 +225,7 @@ func TestPollSyncWhenNoMessagesInQueueButMessagesAreInFlight(t *testing.T) {
 	if err != nil {
 		klog.Fatalf("error setting up beanstalk test: %v\n", err)
 	}
-	key := getKey(namespace, name)
+	key := getMultiQueueKey(namespace, name, "")
 	queues.updateMessage(key, messages)
 	<-doneChan
 
@@ -246,7 +246,7 @@ func TestPollSyncWhenNoMessagesInQueueButMessagesAreInFlight(t *testing.T) {
 	<-doneChan
 
 	nameGot, messagesGot, messagesPerMinGot, idleGot := queues.GetQueueInfo(
-		namespace, name,
+		namespace, name, "",
 	)
 
 	if name != nameGot {
@@ -278,15 +278,15 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 
 	queueSpecs := []QueueSpec{
 		QueueSpec{
-			name:                   "otpsender",
+			Name:                   "otpsender",
 			namespace:              "testns",
 			workers:                10,
-			secondsToProcessOneJob: 0.0,
+			SecondsToProcessOneJob: 0.0,
 		},
 	}
 	messages := int32(0)
 	reserved := int32(0)
-	name := queueSpecs[0].name
+	name := queueSpecs[0].Name
 	namespace := queueSpecs[0].namespace
 	currentWorkers := int32(queueSpecs[0].workers)
 	queueURI := getQueueURI(namespace, name)
@@ -295,7 +295,7 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 	if err != nil {
 		klog.Fatalf("error setting up beanstalk test: %v\n", err)
 	}
-	key := getKey(namespace, name)
+	key := getMultiQueueKey(namespace, name, "")
 	queues.updateMessage(key, messages)
 	<-doneChan
 
@@ -317,7 +317,7 @@ func TestPollSyncWhenNoMessagesInQueueAndNoMessagesAreInFlight(t *testing.T) {
 	<-doneChan
 
 	nameGot, messagesGot, messagesPerMinGot, idleGot := queues.GetQueueInfo(
-		namespace, name,
+		namespace, name, "",
 	)
 
 	if name != nameGot {

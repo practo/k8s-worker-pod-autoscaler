@@ -359,7 +359,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
-			c.Queues.Delete(namespace, name)
+			c.Queues.Delete(namespace, name, "")
 			return nil
 		}
 		return err
@@ -398,103 +398,63 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		return nil
 	}
 
-	var secondsToProcessOneJob float64
-	if workerPodAutoScaler.Spec.SecondsToProcessOneJob != nil {
-		secondsToProcessOneJob = *workerPodAutoScaler.Spec.SecondsToProcessOneJob
-	}
-
 	switch event.name {
 	case WokerPodAutoScalerEventAdd:
-		err = c.Queues.Add(
-			namespace,
-			name,
-			workerPodAutoScaler.Spec.QueueURI,
-			currentWorkers,
-			secondsToProcessOneJob,
-		)
+		for _, q := range workerPodAutoScaler.Spec.Queues {
+			err = c.Queues.Add(
+				namespace,
+				name,
+				q.URI,
+				currentWorkers,
+				q.SecondsToProcessOneJob,
+			)
+		}
 	case WokerPodAutoScalerEventUpdate:
-		err = c.Queues.Add(
-			namespace,
-			name,
-			workerPodAutoScaler.Spec.QueueURI,
-			currentWorkers,
-			secondsToProcessOneJob,
-		)
+		for _, q := range workerPodAutoScaler.Spec.Queues {
+			err = c.Queues.Add(
+				namespace,
+				name,
+				q.URI,
+				currentWorkers,
+				q.SecondsToProcessOneJob,
+			)
+		}
 	case WokerPodAutoScalerEventDelete:
-		err = c.Queues.Delete(namespace, name)
+		for _, q := range workerPodAutoScaler.Spec.Queues {
+			qName := queue.GetQueueName(q.URI)
+			err = c.Queues.Delete(namespace, name, qName)
+		}
 	}
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
 		return err
 	}
 
-	queueName, queueMessages, messagesSentPerMinute, idleWorkers := c.Queues.GetQueueInfo(
-		namespace, name)
-	if queueName == "" {
-		return nil
+	qSpecs := c.Queues.ListMultiQueues(key)
+	for _, qSpec := range qSpecs {
+		if qSpec.Messages == queue.UnsyncedQueueMessageCount {
+			klog.Warningf(
+				"%s qMsgs: %d, q not initialized, waiting for init to complete",
+				qSpec.Name,
+				qSpec.Messages,
+			)
+			return nil
+		}
 	}
 
-	if queueMessages == queue.UnsyncedQueueMessageCount {
-		klog.Warningf(
-			"%s qMsgs: %d, q not initialized, waiting for init to complete",
-			queueName,
-			queueMessages,
-		)
-		return nil
-	}
-
-	desiredWorkers := GetDesiredWorkers(
-		queueName,
-		queueMessages,
-		messagesSentPerMinute,
-		secondsToProcessOneJob,
-		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
+	desiredWorkers, totalQueueMessages := GetDesiredWorkersMultiQueue(
+		deploymentName,
+		qSpecs,
+		workerPodAutoScaler.Spec.Queues,
 		currentWorkers,
-		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
-	klog.V(2).Infof("%s current: %d", queueName, currentWorkers)
-	klog.V(2).Infof("%s qMsgs: %d, desired: %d",
-		queueName, queueMessages, desiredWorkers)
-
-	// set metrics
-	qMsgs.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(queueMessages))
-	qMsgsSPM.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(messagesSentPerMinute)
-	workersIdle.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(idleWorkers))
-	workersCurrent.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(currentWorkers))
-	workersDesired.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(desiredWorkers))
-	workersAvailable.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(availableWorkers))
-
 	lastScaleTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
 
 	op := GetScaleOperation(
-		queueName,
+		deploymentName,
 		desiredWorkers,
 		currentWorkers,
 		lastScaleTime,
@@ -516,7 +476,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		lastScaleTime = &now
 	}
 
-	klog.V(2).Infof("%s scaleOp: %v", queueName, scaleOpString(op))
+	klog.V(2).Infof("%s scaleOp: %v", deploymentName, scaleOpString(op))
 
 	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
 	// current state of the world
@@ -529,7 +489,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		workerPodAutoScaler,
 		currentWorkers,
 		availableWorkers,
-		queueMessages,
+		totalQueueMessages,
 		lastScaleTime,
 	)
 
@@ -636,6 +596,25 @@ func getMinWorkers(
 	klog.V(4).Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
 	if workersBasedOnMessagesSent > minWorkers {
 		return workersBasedOnMessagesSent
+	}
+	return minWorkers
+}
+
+// getMinMultiQueueWorkers gets the min workers based on the
+// velocity metric: messagesSentPerMinute
+func getMinMultiQueueWorkers(
+	queueSpecs map[string]queue.QueueSpec,
+	minWorkers int32) int32 {
+	var totalMinWorkers int32
+	for _, qSpec := range queueSpecs {
+		workersBasedOnMessagesSent := int32(math.Ceil((qSpec.SecondsToProcessOneJob * qSpec.MessagesSentPerMinute) / 60))
+		klog.V(4).Infof("%v, workersBasedOnMessagesSent=%v\n", qSpec.SecondsToProcessOneJob, workersBasedOnMessagesSent)
+		totalMinWorkers += workersBasedOnMessagesSent
+	}
+	klog.V(4).Infof("%v, totalWorkersBasedOnMessagesSent=%v\n", totalMinWorkers)
+
+	if totalMinWorkers > minWorkers {
+		return totalMinWorkers
 	}
 	return minWorkers
 }
@@ -757,6 +736,116 @@ func GetDesiredWorkers(
 		maxWorkers,
 		maxDisruptableWorkers,
 	)
+}
+
+// GetDesiredWorkers finds the desired number of workers which are required
+func GetDesiredWorkersMultiQueue(
+	deploymentName string,
+	queueSpecs map[string]queue.QueueSpec,
+	k8QueueSpecs []v1.Queue,
+	currentWorkers int32,
+	minWorkers int32,
+	maxWorkers int32,
+	maxDisruption *string) (int32, int32) {
+	for _, k8QSpec := range k8QueueSpecs {
+		qSpec := queueSpecs[k8QSpec.URI]
+		klog.V(4).Infof("%s min=%v, max=%v, targetBacklog=%v \n",
+			qSpec.Name, minWorkers, maxWorkers, k8QSpec.TargetMessagesPerWorker)
+	}
+
+	totalQueueMessages, totalMessagesSentPerMinute, idleWorkers := queue.Aggregate(queueSpecs)
+
+	// overwrite the minimum workers needed based on
+	// messagesSentPerMinute and secondsToProcessOneJob
+	// this feature is disabled if secondsToProcessOneJob is not set or is 0.0
+	minWorkers += getMinMultiQueueWorkers(
+		queueSpecs,
+		minWorkers,
+	)
+
+	// gets the maximum number of workers that can be scaled down in a
+	// single scale down activity.
+	maxDisruptableWorkers := getMaxDisruptableWorkers(
+		maxDisruption, currentWorkers,
+	)
+
+	tolerance := 0.1
+	var desiredWorkers int32
+	for _, k8QSpec := range k8QueueSpecs {
+		qSpec := queueSpecs[k8QSpec.URI]
+		desiredWorkers += int32(math.Ceil(
+			float64(qSpec.Messages) / float64(k8QSpec.TargetMessagesPerWorker)),
+		)
+	}
+
+	if currentWorkers == 0 {
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		), totalQueueMessages
+	}
+
+	if totalQueueMessages > 0 {
+		if isChangeTooSmall(desiredWorkers, currentWorkers, tolerance) {
+			// desired is same as current in this scenario
+			return convertDesiredReplicasWithRules(
+				currentWorkers,
+				currentWorkers,
+				minWorkers,
+				maxWorkers,
+				maxDisruptableWorkers,
+			), totalQueueMessages
+		}
+
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		), totalQueueMessages
+	} else if totalMessagesSentPerMinute > 0 {
+		// this is the case in which there is no backlog visible.
+		// (mostly because the workers picks up jobs very quickly)
+		// But the queue has throughput, so we return the minWorkers.
+		// Note: minWorkers is updated based on
+		// messagesSentPerMinute and secondsToProcessOneJob
+		// desried is the minReplicas in this scenario
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			minWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		), totalQueueMessages
+	}
+
+	// Attempt for massive scale down
+	if currentWorkers == idleWorkers {
+		desiredWorkers := int32(0)
+		// for massive scale down to happen maxDisruptableWorkers
+		// should be ignored
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			currentWorkers,
+		), totalQueueMessages
+	}
+
+	// Attempt partial scale down since there is no backlog or in-processing
+	// messages.
+	return convertDesiredReplicasWithRules(
+		currentWorkers,
+		minWorkers,
+		minWorkers,
+		maxWorkers,
+		maxDisruptableWorkers,
+	), totalQueueMessages
 }
 
 func convertDesiredReplicasWithRules(

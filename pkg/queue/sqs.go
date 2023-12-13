@@ -372,7 +372,7 @@ func (s *SQS) GetName() string {
 }
 
 func (s *SQS) poll(key string, queueSpec QueueSpec) {
-	if queueSpec.workers == 0 && queueSpec.messages == 0 && queueSpec.messagesSentPerMinute == 0 {
+	if queueSpec.workers == 0 && queueSpec.Messages == 0 && queueSpec.MessagesSentPerMinute == 0 {
 		s.queues.updateIdleWorkers(key, -1)
 
 		// If there are no workers running we do a long poll to find a job(s)
@@ -383,15 +383,15 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		if err != nil {
 			aerr, ok := err.(awserr.Error)
 			if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-				klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+				klog.Errorf("Unable to find queue %q, %v.", queueSpec.Name, err)
 				return
 			} else if ok && aerr.Code() == "RequestError" {
 				klog.Errorf("Unable to perform request long polling %q, %v.",
-					queueSpec.name, err)
+					queueSpec.Name, err)
 				return
 			} else {
 				klog.Errorf("Unable to receive message from queue %q, %v.",
-					queueSpec.name, err)
+					queueSpec.Name, err)
 				return
 			}
 		}
@@ -400,35 +400,35 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 		return
 	}
 
-	if queueSpec.secondsToProcessOneJob != 0.0 {
+	if queueSpec.SecondsToProcessOneJob != 0.0 {
 		messagesSentPerMinute, err := s.cachedNumberOfSentMessages(queueSpec.uri)
 		if err != nil {
 			klog.Errorf("Unable to fetch no of messages to the queue %q, %v.",
-				queueSpec.name, err)
+				queueSpec.Name, err)
 			return
 		}
 		s.queues.updateMessageSent(key, messagesSentPerMinute)
-		klog.V(3).Infof("%s: messagesSentPerMinute=%v", queueSpec.name, messagesSentPerMinute)
+		klog.V(3).Infof("%s: messagesSentPerMinute=%v", queueSpec.Name, messagesSentPerMinute)
 	}
 
 	approxMessages, err := s.getApproxMessages(queueSpec.uri)
 	if err != nil {
 		aerr, ok := err.(awserr.Error)
 		if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-			klog.Errorf("Unable to find queue %q, %v. (checking after 20s)", queueSpec.name, err)
+			klog.Errorf("Unable to find queue %q, %v. (checking after 20s)", queueSpec.Name, err)
 			time.Sleep(20 * time.Second)
 			return
 		} else if ok && aerr.Code() == "RequestError" {
 			klog.Errorf("Unable to perform request get approximate messages %q, %v.",
-				queueSpec.name, err)
+				queueSpec.Name, err)
 			return
 		} else {
 			klog.Errorf("Unable to get approximate messages in queue %q, %v.",
-				queueSpec.name, err)
+				queueSpec.Name, err)
 			return
 		}
 	}
-	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.name, approxMessages)
+	klog.V(3).Infof("%s: approxMessages=%d", queueSpec.Name, approxMessages)
 
 	// approxMessagesNotVisible is queried to prevent scaling down when their are
 	// workers which are doing the processing, so if approxMessagesNotVisible > 0 we
@@ -437,15 +437,15 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	if err != nil {
 		aerr, ok := err.(awserr.Error)
 		if ok && aerr.Code() == sqs.ErrCodeQueueDoesNotExist {
-			klog.Errorf("Unable to find queue %q, %v.", queueSpec.name, err)
+			klog.Errorf("Unable to find queue %q, %v.", queueSpec.Name, err)
 			return
 		} else if ok && aerr.Code() == "RequestError" {
 			klog.Errorf("Unable to perform request get approximate messages not visible %q, %v.",
-				queueSpec.name, err)
+				queueSpec.Name, err)
 			return
 		} else {
 			klog.Errorf("Unable to get approximate messages not visible in queue %q, %v.",
-				queueSpec.name, err)
+				queueSpec.Name, err)
 			return
 		}
 	}
@@ -460,7 +460,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	}
 
 	if approxMessagesNotVisible > 0 {
-		klog.V(3).Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.name)
+		klog.V(3).Infof("%s: approxMessagesNotVisible > 0, not scaling down", queueSpec.Name)
 		s.waitForShortPollInterval()
 		return
 	}
@@ -468,7 +468,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	numberOfMessagesReceived, err := s.cachedNumberOfReceiveMessages(queueSpec.uri)
 	if err != nil {
 		klog.Errorf("Unable to fetch no of received messages for queue %q, %v.",
-			queueSpec.name, err)
+			queueSpec.Name, err)
 		time.Sleep(100 * time.Millisecond)
 		return
 	}
@@ -482,7 +482,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 	}
 
 	klog.V(3).Infof("%s: msgsReceived=%f, workers=%d, idleWorkers=%d",
-		queueSpec.name,
+		queueSpec.Name,
 		numberOfMessagesReceived,
 		queueSpec.workers,
 		idleWorkers,
