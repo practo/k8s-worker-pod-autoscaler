@@ -36,15 +36,10 @@ spec:
             oneOf:
             - required:
               - deploymentName
-            - required:
-              - replicaSetName
             properties:
               deploymentName:
                 type: string
                 description: 'Name of the Kubernetes Deployment in the same namespace as WPA object'
-              replicaSetName:
-                type: string
-                description: 'Name of the Kubernetes ReplicaSet in the same namespace as WPA object'
               maxDisruption:
                 type: string
                 nullable: true

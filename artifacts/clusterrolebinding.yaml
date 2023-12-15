@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: workerpodautoscaler
+  name: workerpodcustomautoscaler
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: workerpodautoscaler
+  name: workerpodcustomautoscaler
 subjects:
 - kind: ServiceAccount
-  name: workerpodautoscaler
+  name: workerpodcustomautoscaler
   namespace: kube-system

@@ -1,28 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
- name: workerpodautoscaler
+ name: workerpodcustomautoscaler
  namespace: kube-system
  labels:
-   app: workerpodautoscaler
+   app: workerpodcustomautoscaler
 spec:
  replicas: 1
  selector:
    matchLabels:
-     app: workerpodautoscaler
+     app: workerpodcustomautoscaler
  template:
    metadata:
      labels:
-       app: workerpodautoscaler
+       app: workerpodcustomautoscaler
    spec:
-     serviceAccountName: workerpodautoscaler
+     serviceAccountName: workerpodcustomautoscaler
      tolerations:
      - effect: NoExecute
        operator: Exists
      - effect: NoSchedule
        operator: Exists
      containers:
-     - name: wpa
+     - name: wpca
        env:
        - name: AWS_ACCESS_KEY_ID
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
@@ -41,7 +41,7 @@ spec:
        - --k8s-api-qps=5.0
        - --k8s-api-burst=10
        - --wpa-default-max-disruption=100%
-       - --queue-services=sqs,beanstalkd
+       - --queue-services=sqs
        - -v=2
        resources:
          limits:
