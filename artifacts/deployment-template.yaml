@@ -28,7 +28,7 @@ spec:
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
        - name: AWS_SECRET_ACCESS_KEY
          value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: public.ecr.aws/practo/workerpodautoscaler:{{ WPA_TAG }}
+       image: 261701980167.dkr.ecr.us-east-1.amazonaws.com/k8s-worker-pod-autoscaler/workerpodautoscaler:{{ WPA_TAG }}
        imagePullPolicy: Always
        command:
        - /workerpodautoscaler

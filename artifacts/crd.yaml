@@ -57,11 +57,9 @@ spec:
                 items:
                   type: object
                   properties:
-                    URI:
-                      type: array
-                      items:
-                        type: string
-                        description: 'Full URL of the queue'
+                    uri:
+                      type: string
+                      description: 'Full URL of the queue'
                     targetMessagesPerWorker:
                       type: integer
                       format: int32

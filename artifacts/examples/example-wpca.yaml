@@ -1,5 +1,5 @@
 apiVersion: k8s.practo.dev/v1
-kind: ,
+kind: WorkerPodCustomAutoScaler
 metadata:
   name: example-wpa
 spec:
