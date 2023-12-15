@@ -24,8 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// WorkerPodAutoScalers returns a WorkerPodAutoScalerInformer.
-	WorkerPodAutoScalers() WorkerPodAutoScalerInformer
+	// WorkerPodCustomAutoScalers returns a WorkerPodCustomAutoScalerInformer.
+	WorkerPodCustomAutoScalers() WorkerPodCustomAutoScalerInformer
 }
 
 type version struct {
@@ -39,7 +39,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// WorkerPodAutoScalers returns a WorkerPodAutoScalerInformer.
-func (v *version) WorkerPodAutoScalers() WorkerPodAutoScalerInformer {
-	return &workerPodAutoScalerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// WorkerPodCustomAutoScalers returns a WorkerPodCustomAutoScalerInformer.
+func (v *version) WorkerPodCustomAutoScalers() WorkerPodCustomAutoScalerInformer {
+	return &workerPodCustomAutoScalerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

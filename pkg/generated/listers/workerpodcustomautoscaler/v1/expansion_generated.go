@@ -18,10 +18,10 @@ limitations under the License.
 
 package v1
 
-// WorkerPodAutoScalerListerExpansion allows custom methods to be added to
-// WorkerPodAutoScalerLister.
-type WorkerPodAutoScalerListerExpansion interface{}
+// WorkerPodCustomAutoScalerListerExpansion allows custom methods to be added to
+// WorkerPodCustomAutoScalerLister.
+type WorkerPodCustomAutoScalerListerExpansion interface{}
 
-// WorkerPodAutoScalerNamespaceListerExpansion allows custom methods to be added to
-// WorkerPodAutoScalerNamespaceLister.
-type WorkerPodAutoScalerNamespaceListerExpansion interface{}
+// WorkerPodCustomAutoScalerNamespaceListerExpansion allows custom methods to be added to
+// WorkerPodCustomAutoScalerNamespaceLister.
+type WorkerPodCustomAutoScalerNamespaceListerExpansion interface{}

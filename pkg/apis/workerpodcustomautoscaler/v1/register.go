@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler"
+	"github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodcustomautoscaler"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 )
 
 // SchemeGroupVersion is group version used to register these objects
-var SchemeGroupVersion = schema.GroupVersion{Group: workerpodautoscaler.GroupName, Version: "v1"}
+var SchemeGroupVersion = schema.GroupVersion{Group: workerpodcustomautoscaler.GroupName, Version: "v1"}
 
 // Kind takes an unqualified kind and returns back a Group qualified GroupKind
 func Kind(kind string) schema.GroupKind {
@@ -35,8 +35,8 @@ var (
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&WorkerPodAutoScaler{},
-		&WorkerPodAutoScalerList{},
+		&WorkerPodCustomAutoScaler{},
+		&WorkerPodCustomAutoScalerList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

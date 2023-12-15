@@ -1,4 +1,4 @@
-package workerpodautoscaler
+package workerpodcustomautoscaler
 
 // GroupName is the group name used in this package
 const (

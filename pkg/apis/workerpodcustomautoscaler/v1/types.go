@@ -7,17 +7,17 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// WorkerPodAutoScaler is a specification for a WorkerPodAutoScaler resource
-type WorkerPodAutoScaler struct {
+// WorkerPodCustomAutoScaler is a specification for a WorkerPodCustomAutoScaler resource
+type WorkerPodCustomAutoScaler struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   WorkerPodAutoScalerSpec   `json:"spec"`
-	Status WorkerPodAutoScalerStatus `json:"status"`
+	Spec   WorkerPodCustomAutoScalerSpec   `json:"spec"`
+	Status WorkerPodCustomAutoScalerStatus `json:"status"`
 }
 
-// WorkerPodAutoScalerSpec is the spec for a WorkerPodAutoScaler resource
-type WorkerPodAutoScalerSpec struct {
+// WorkerPodCustomAutoScalerSpec is the spec for a WorkerPodCustomAutoScaler resource
+type WorkerPodCustomAutoScalerSpec struct {
 	MinReplicas    *int32  `json:"minReplicas"`
 	MaxReplicas    *int32  `json:"maxReplicas"`
 	MaxDisruption  *string `json:"maxDisruption,omitempty"`
@@ -32,8 +32,8 @@ type Queue struct {
 	SecondsToProcessOneJob  float64 `json:"secondsToProcessOneJob,omitempty"`
 }
 
-// WorkerPodAutoScalerStatus is the status for a WorkerPodAutoScaler resource
-type WorkerPodAutoScalerStatus struct {
+// WorkerPodCustomAutoScalerStatus is the status for a WorkerPodCustomAutoScaler resource
+type WorkerPodCustomAutoScalerStatus struct {
 	CurrentMessages   int32 `json:"CurrentMessages"`
 	CurrentReplicas   int32 `json:"CurrentReplicas"`
 	AvailableReplicas int32 `json:"AvailableReplicas"`
@@ -48,10 +48,10 @@ type WorkerPodAutoScalerStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// WorkerPodAutoScalerList is a list of WorkerPodAutoScaler resources
-type WorkerPodAutoScalerList struct {
+// WorkerPodCustomAutoScalerList is a list of WorkerPodCustomAutoScaler resources
+type WorkerPodCustomAutoScalerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 
-	Items []WorkerPodAutoScaler `json:"items"`
+	Items []WorkerPodCustomAutoScaler `json:"items"`
 }
