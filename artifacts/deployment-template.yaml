@@ -28,21 +28,9 @@ spec:
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
        - name: AWS_SECRET_ACCESS_KEY
          value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: 261701980167.dkr.ecr.us-east-1.amazonaws.com/k8s-worker-pod-autoscaler/workerpodautoscaler:{{ WPA_TAG }}
+       image: clearskyfish/k8s-worker-pod-custom-autoscaler:{{ WPA_TAG }}
        imagePullPolicy: Always
-       command:
-       - /workerpodautoscaler
-       - run
-       - --resync-period=20
-       - --wpa-threads=10
-       - --aws-regions={{ WPA_AWS_REGIONS }}
-       - --sqs-short-poll-interval=20
-       - --sqs-long-poll-interval=20
-       - --k8s-api-qps=5.0
-       - --k8s-api-burst=10
-       - --wpa-default-max-disruption=100%
-       - --queue-services=sqs
-       - -v=2
+       command: ["sleep", "3600"]
        resources:
          limits:
            cpu: 100m
