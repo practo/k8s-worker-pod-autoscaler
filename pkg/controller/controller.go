@@ -24,7 +24,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 
-	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodcustomautoscaler/v1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscalermultiqueue/v1"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	samplescheme "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodcustomautoscaler/v1"
@@ -35,18 +35,18 @@ import (
 const controllerAgentName = "workerpodcustomautoscaler-controller"
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a WorkerPodCustomAutoScaler is synced
+	// SuccessSynced is used as part of the Event 'reason' when a WorkerPodAutoScalerMultiQueue is synced
 	SuccessSynced = "Synced"
-	// ErrResourceExists is used as part of the Event 'reason' when a WorkerPodCustomAutoScaler fails
+	// ErrResourceExists is used as part of the Event 'reason' when a WorkerPodAutoScalerMultiQueue fails
 	// to sync due to a Deployment of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
 
 	// MessageResourceExists is the message used for Events when a resource
 	// fails to sync due to a Deployment already existing
-	MessageResourceExists = "Resource %q already exists and is not managed by WorkerPodCustomAutoScaler"
-	// MessageResourceSynced is the message used for an Event fired when a WorkerPodCustomAutoScaler
+	MessageResourceExists = "Resource %q already exists and is not managed by WorkerPodAutoScalerMultiQueue"
+	// MessageResourceSynced is the message used for an Event fired when a WorkerPodAutoScalerMultiQueue
 	// is synced successfully
-	MessageResourceSynced = "WorkerPodCustomAutoScaler synced successfully"
+	MessageResourceSynced = "WorkerPodAutoScalerMultiQueue synced successfully"
 
 	// WokerPodAutoScalerEventAdd stores the add event name
 	WokerPodAutoScalerEventAdd = "add"
@@ -156,7 +156,7 @@ type WokerPodAutoScalerEvent struct {
 	name string
 }
 
-// Controller is the controller implementation for WorkerPodCustomAutoScaler resources
+// Controller is the controller implementation for WorkerPodAutoScalerMultiQueue resources
 type Controller struct {
 	ctx context.Context
 
@@ -237,7 +237,7 @@ func NewController(
 
 	klog.V(4).Info("Setting up event handlers")
 
-	// Set up an event handler for when WorkerPodCustomAutoScaler resources change
+	// Set up an event handler for when WorkerPodAutoScalerMultiQueue resources change
 	workerPodAutoScalerInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueAddWorkerPodAutoScaler,
 		UpdateFunc: func(old, new interface{}) {
@@ -257,7 +257,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	klog.V(1).Info("Starting WorkerPodCustomAutoScaler controller")
+	klog.V(1).Info("Starting WorkerPodAutoScalerMultiQueue controller")
 
 	// Wait for the caches to be synced before starting workers
 	klog.V(1).Info("Waiting for informer caches to sync")
@@ -266,7 +266,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	klog.V(1).Info("Starting workers")
-	// Launch two workers to process WorkerPodCustomAutoScaler resources
+	// Launch two workers to process WorkerPodAutoScalerMultiQueue resources
 	for i := 0; i < threadiness; i++ {
 		// TOOD: move from stopCh to context, use: UntilWithContext()
 		go wait.Until(c.runWorker, time.Second, stopCh)
@@ -320,7 +320,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// WorkerPodCustomAutoScaler resource to be synced.
+		// WorkerPodAutoScalerMultiQueue resource to be synced.
 		if err := c.syncHandler(ctx, event); err != nil {
 			// Put the item back on the workqueue to handle any transient errors.
 			c.workqueue.AddRateLimited(event)
@@ -341,7 +341,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the WorkerPodCustomAutoScaler resource
+// converge the two. It then updates the Status block of the WorkerPodAutoScalerMultiQueue resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEvent) error {
 	now := time.Now()
@@ -353,10 +353,10 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		return nil
 	}
 
-	// Get the WorkerPodCustomAutoScaler resource with this namespace/name
+	// Get the WorkerPodAutoScalerMultiQueue resource with this namespace/name
 	workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodCustomAutoScalers(namespace).Get(name)
 	if err != nil {
-		// The WorkerPodCustomAutoScaler resource may no longer exist, in which case we stop processing.
+		// The WorkerPodAutoScalerMultiQueue resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
 			c.Queues.Delete(namespace, name, "")
@@ -369,7 +369,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
 	replicaSetName := workerPodAutoScaler.Spec.ReplicaSetName
 	if deploymentName != "" {
-		// Get the Deployment with the name specified in WorkerPodCustomAutoScaler.spec
+		// Get the Deployment with the name specified in WorkerPodAutoScalerMultiQueue.spec
 		deployment, err := c.deploymentLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("deployment %s not found in namespace %s",
@@ -380,7 +380,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		currentWorkers = *deployment.Spec.Replicas
 		availableWorkers = deployment.Status.AvailableReplicas
 	} else if replicaSetName != "" {
-		// Get the ReplicaSet with the name specified in WorkerPodCustomAutoScaler.spec
+		// Get the ReplicaSet with the name specified in WorkerPodAutoScalerMultiQueue.spec
 		replicaSet, err := c.replicaSetLister.ReplicaSets(workerPodAutoScaler.Namespace).Get(replicaSetName)
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("ReplicaSet %s not found in namespace %s",
@@ -478,7 +478,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 
 	klog.V(2).Infof("%s scaleOp: %v", deploymentName, scaleOpString(op))
 
-	// Finally, we update the status block of the WorkerPodCustomAutoScaler resource to reflect the
+	// Finally, we update the status block of the WorkerPodAutoScalerMultiQueue resource to reflect the
 	// current state of the world
 	updateWorkerPodAutoScalerStatus(
 		ctx,
@@ -878,7 +878,7 @@ func updateWorkerPodAutoScalerStatus(
 	namespace string,
 	customclientset clientset.Interface,
 	desiredWorkers int32,
-	workerPodAutoScaler *v1.WorkerPodCustomAutoScaler,
+	workerPodAutoScaler *v1.WorkerPodAutoScalerMultiQueue,
 	currentWorkers int32,
 	availableWorkers int32,
 	queueMessages int32,
@@ -905,7 +905,7 @@ func updateWorkerPodAutoScalerStatus(
 	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
 	workerPodAutoScalerCopy.Status.LastScaleTime = lastScaleTime
 	// If the CustomResourceSubresources feature gate is not enabled,
-	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodCustomAutoScaler resource.
+	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScalerMultiQueue resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
 	_, err := customclientset.K8sV1().WorkerPodCustomAutoScalers(workerPodAutoScaler.Namespace).UpdateStatus(ctx, workerPodAutoScalerCopy, metav1.UpdateOptions{})
@@ -916,9 +916,9 @@ func updateWorkerPodAutoScalerStatus(
 	klog.V(4).Infof("%s/%s: Updated wpa status\n", namespace, name)
 }
 
-// getKeyForWorkerPodAutoScaler takes a WorkerPodCustomAutoScaler resource and converts it into a namespace/name
+// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScalerMultiQueue resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than WorkerPodCustomAutoScaler.
+// passed resources of any type other than WorkerPodAutoScalerMultiQueue.
 func (c *Controller) getKeyForWorkerPodAutoScaler(obj interface{}) string {
 	var key string
 	var err error

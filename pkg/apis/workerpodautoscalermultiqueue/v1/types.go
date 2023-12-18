@@ -7,17 +7,17 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// WorkerPodCustomAutoScaler is a specification for a WorkerPodCustomAutoScaler resource
-type WorkerPodCustomAutoScaler struct {
+// WorkerPodAutoScalerMultiQueue is a specification for a WorkerPodAutoScalerMultiQueue resource
+type WorkerPodAutoScalerMultiQueue struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   WorkerPodCustomAutoScalerSpec   `json:"spec"`
-	Status WorkerPodCustomAutoScalerStatus `json:"status"`
+	Spec   WorkerPodAutoScalerMultiQueueSpec   `json:"spec"`
+	Status WorkerPodAutoScalerMultiQueueStatus `json:"status"`
 }
 
-// WorkerPodCustomAutoScalerSpec is the spec for a WorkerPodCustomAutoScaler resource
-type WorkerPodCustomAutoScalerSpec struct {
+// WorkerPodAutoScalerMultiQueueSpec is the spec for a WorkerPodAutoScalerMultiQueue resource
+type WorkerPodAutoScalerMultiQueueSpec struct {
 	MinReplicas    *int32  `json:"minReplicas"`
 	MaxReplicas    *int32  `json:"maxReplicas"`
 	MaxDisruption  *string `json:"maxDisruption,omitempty"`
@@ -32,8 +32,8 @@ type Queue struct {
 	SecondsToProcessOneJob  float64 `json:"secondsToProcessOneJob,omitempty"`
 }
 
-// WorkerPodCustomAutoScalerStatus is the status for a WorkerPodCustomAutoScaler resource
-type WorkerPodCustomAutoScalerStatus struct {
+// WorkerPodAutoScalerMultiQueueStatus is the status for a WorkerPodAutoScalerMultiQueue resource
+type WorkerPodAutoScalerMultiQueueStatus struct {
 	CurrentMessages   int32 `json:"CurrentMessages"`
 	CurrentReplicas   int32 `json:"CurrentReplicas"`
 	AvailableReplicas int32 `json:"AvailableReplicas"`
@@ -48,10 +48,10 @@ type WorkerPodCustomAutoScalerStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// WorkerPodCustomAutoScalerList is a list of WorkerPodCustomAutoScaler resources
-type WorkerPodCustomAutoScalerList struct {
+// WorkerPodAutoScalerMultiQueueList is a list of WorkerPodAutoScalerMultiQueue resources
+type WorkerPodAutoScalerMultiQueueList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 
-	Items []WorkerPodCustomAutoScaler `json:"items"`
+	Items []WorkerPodAutoScalerMultiQueue `json:"items"`
 }

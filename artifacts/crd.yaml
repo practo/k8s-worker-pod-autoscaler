@@ -1,17 +1,17 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: workerpodcustomautoscalers.k8s.practo.dev
+  name: workerpodautoscalermultiqueue.k8s.practo.dev
 spec:
   group: k8s.practo.dev
   names:
-    kind: WorkerPodCustomAutoScaler
-    listKind: WorkerPodCustomAutoScalerList
-    plural: workerpodcustomautoscalers
+    kind: WorkerPodAutoScalerMultiQueue
+    listKind: WorkerPodAutoScalerMultiQueueList
+    plural: workerpodautoscalermultiqueues
     shortNames:
-    - wpca
-    - wpcas
-    singular: workerpodcustomautoscaler
+    - wpca-multiqueue
+    - wpca-multiqueues
+    singular: workerpodautoscalermultiqueue
   scope: Namespaced
   versions:
   - name: v1

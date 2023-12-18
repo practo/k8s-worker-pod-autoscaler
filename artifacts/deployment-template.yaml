@@ -1,36 +1,48 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
- name: workerpodcustomautoscaler
+ name: workerpodautoscalermultiqueue
  namespace: kube-system
  labels:
-   app: workerpodcustomautoscaler
+   app: workerpodautoscalermultiqueue
 spec:
  replicas: 1
  selector:
    matchLabels:
-     app: workerpodcustomautoscaler
+     app: workerpodautoscalermultiqueue
  template:
    metadata:
      labels:
-       app: workerpodcustomautoscaler
+       app: workerpodautoscalermultiqueue
    spec:
-     serviceAccountName: workerpodcustomautoscaler
+     serviceAccountName: workerpodautoscalermultiqueue
      tolerations:
      - effect: NoExecute
        operator: Exists
      - effect: NoSchedule
        operator: Exists
      containers:
-     - name: wpca
+     - name: wpa-multiqueue
        env:
        - name: AWS_ACCESS_KEY_ID
          value: {{ WPA_AWS_ACCESS_KEY_ID }}
        - name: AWS_SECRET_ACCESS_KEY
          value: {{ WPA_AWS_SECRET_ACCESS_KEY }}
-       image: clearskyfish/k8s-worker-pod-custom-autoscaler:{{ WPA_TAG }}
+       image: clearskyfish/workerpodautoscalermultiqueue:{{ WPA_TAG }}
        imagePullPolicy: Always
-       command: ["sleep", "3600"]
+       command:
+         - /workerpodautoscaler
+         - run
+         - --resync-period=20
+         - --wpa-threads=10
+         - --aws-regions=us-east-1
+         - --sqs-short-poll-interval=20
+         - --sqs-long-poll-interval=20
+         - --k8s-api-qps=5.0
+         - --k8s-api-burst=10
+         - --wpa-default-max-disruption=100%
+         - --queue-services=sqs
+         - -v=2
        resources:
          limits:
            cpu: 100m

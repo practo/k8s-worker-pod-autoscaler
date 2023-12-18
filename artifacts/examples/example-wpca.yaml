@@ -1,7 +1,7 @@
 apiVersion: k8s.practo.dev/v1
-kind: WorkerPodCustomAutoScaler
+kind: WorkerPodAutoScalerMultiQueue
 metadata:
-  name: example-wpa
+  name: example-wpa-multiqueue
 spec:
   minReplicas: 0
   maxReplicas: 10

@@ -21,7 +21,7 @@ package versioned
 import (
 	"fmt"
 
-	k8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodcustomautoscaler/v1"
+	k8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscalermultiqueue/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

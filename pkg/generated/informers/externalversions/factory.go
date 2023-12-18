@@ -25,7 +25,7 @@ import (
 
 	versioned "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	internalinterfaces "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/internalinterfaces"
-	workerpodcustomautoscaler "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodcustomautoscaler"
+	workerpodautoscalermultiqueue "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscalermultiqueue"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -172,9 +172,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	K8s() workerpodcustomautoscaler.Interface
+	K8s() workerpodautoscalermultiqueue.Interface
 }
 
-func (f *sharedInformerFactory) K8s() workerpodcustomautoscaler.Interface {
-	return workerpodcustomautoscaler.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) K8s() workerpodautoscalermultiqueue.Interface {
+	return workerpodautoscalermultiqueue.New(f, f.namespace, f.tweakListOptions)
 }

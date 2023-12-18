@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodcustomautoscaler/v1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscalermultiqueue/v1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )
@@ -28,8 +28,8 @@ type FakeK8sV1 struct {
 	*testing.Fake
 }
 
-func (c *FakeK8sV1) WorkerPodCustomAutoScalers(namespace string) v1.WorkerPodCustomAutoScalerInterface {
-	return &FakeWorkerPodCustomAutoScalers{c, namespace}
+func (c *FakeK8sV1) WorkerPodAutoScalerMultiQueues(namespace string) v1.WorkerPodAutoScalerMultiQueueInterface {
+	return &FakeWorkerPodAutoScalerMultiQueues{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
