@@ -758,7 +758,7 @@ func GetDesiredWorkersMultiQueue(
 	// overwrite the minimum workers needed based on
 	// messagesSentPerMinute and secondsToProcessOneJob
 	// this feature is disabled if secondsToProcessOneJob is not set or is 0.0
-	minWorkers += getMinMultiQueueWorkers(
+	minWorkers = getMinMultiQueueWorkers(
 		queueSpecs,
 		minWorkers,
 	)
