@@ -587,15 +587,16 @@ func getMinWorkers(
 // getMinMultiQueueWorkers gets the min workers based on the
 // velocity metric: messagesSentPerMinute
 func getMinMultiQueueWorkers(
+	deploymentName string,
 	queueSpecs map[string]queue.QueueSpec,
 	minWorkers int32) int32 {
 	var totalMinWorkers int32
 	for _, qSpec := range queueSpecs {
 		workersBasedOnMessagesSent := int32(math.Ceil((qSpec.SecondsToProcessOneJob * qSpec.MessagesSentPerMinute) / 60))
-		klog.V(4).Infof("%v, workersBasedOnMessagesSent=%v\n", qSpec.SecondsToProcessOneJob, workersBasedOnMessagesSent)
+		klog.V(4).Infof("%s: secondsToProcessOneJob=%v, workersBasedOnMessagesSent=%v\n", qSpec.Name, qSpec.SecondsToProcessOneJob, workersBasedOnMessagesSent)
 		totalMinWorkers += workersBasedOnMessagesSent
 	}
-	klog.V(4).Infof("%v, totalWorkersBasedOnMessagesSent=%v\n", totalMinWorkers)
+	klog.V(4).Infof("%s: totalWorkersBasedOnMessagesSent=%v\n", deploymentName, totalMinWorkers)
 
 	if totalMinWorkers > minWorkers {
 		return totalMinWorkers
@@ -722,7 +723,7 @@ func GetDesiredWorkers(
 	)
 }
 
-// GetDesiredWorkers finds the desired number of workers which are required
+// GetDesiredWorkersMultiQueue finds the desired number of workers which are required
 func GetDesiredWorkersMultiQueue(
 	deploymentName string,
 	queueSpecs map[string]queue.QueueSpec,
@@ -743,6 +744,7 @@ func GetDesiredWorkersMultiQueue(
 	// messagesSentPerMinute and secondsToProcessOneJob
 	// this feature is disabled if secondsToProcessOneJob is not set or is 0.0
 	minWorkers = getMinMultiQueueWorkers(
+		deploymentName,
 		queueSpecs,
 		minWorkers,
 	)
@@ -761,6 +763,7 @@ func GetDesiredWorkersMultiQueue(
 			float64(qSpec.Messages) / float64(k8QSpec.TargetMessagesPerWorker)),
 		)
 	}
+	klog.V(4).Infof("MinWorkers: %v, MaxWorkers: %v, DesiredWorkers: %v, CurrentWorkers: %v, idleWorkers=%v\n", minWorkers, maxWorkers, desiredWorkers, currentWorkers, idleWorkers)
 
 	if currentWorkers == 0 {
 		return convertDesiredReplicasWithRules(
