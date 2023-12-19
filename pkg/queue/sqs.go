@@ -449,7 +449,7 @@ func (s *SQS) poll(key string, queueSpec QueueSpec) {
 			return
 		}
 	}
-	klog.V(3).Infof("approxMessagesNotVisible=%d", approxMessagesNotVisible)
+	klog.V(3).Infof("%s: approxMessagesNotVisible=%d", queueSpec.Name, approxMessagesNotVisible)
 
 	s.queues.updateMessage(key, approxMessages+approxMessagesNotVisible)
 
