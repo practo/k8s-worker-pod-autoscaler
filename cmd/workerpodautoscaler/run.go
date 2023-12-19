@@ -55,8 +55,6 @@ func (v *runCmd) new() *cobra.Command {
 		"kube-config",
 		"sqs-short-poll-interval",
 		"sqs-long-poll-interval",
-		"beanstalk-short-poll-interval",
-		"beanstalk-long-poll-interval",
 		"queue-services",
 		"metrics-port",
 		"k8s-api-qps",
@@ -68,13 +66,11 @@ func (v *runCmd) new() *cobra.Command {
 	flags.Int("resync-period", 20, "maximum sync period for the control loop but the control loop can execute sooner if the wpa status object gets updated.")
 	flags.Int("wpa-threads", 10, "wpa threadiness, number of threads to process wpa resources")
 	flags.String("wpa-default-max-disruption", "100%", "it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage.")
-	flags.String("aws-regions", "ap-south-1,ap-southeast-1", "comma separated aws regions of SQS")
+	flags.String("aws-regions", "us-east-1", "comma separated aws regions of SQS")
 	flags.String("kube-config", "", "path of the kube config file, if not specified in cluster config is used")
 	flags.Int("sqs-short-poll-interval", 20, "the duration (in seconds) after which the next sqs api call is made to fetch the queue length")
 	flags.Int("sqs-long-poll-interval", 20, "the duration (in seconds) for which the sqs receive message call waits for a message to arrive")
-	flags.Int("beanstalk-short-poll-interval", 20, "the duration (in seconds) after which the next beanstalk api call is made to fetch the queue length")
-	flags.Int("beanstalk-long-poll-interval", 20, "the duration (in seconds) for which the beanstalk receive message call waits for a message to arrive")
-	flags.String("queue-services", "sqs,beanstalkd", "comma separated queue services, the WPA will start with")
+	flags.String("queue-services", "sqs", "comma separated queue services, the WPA will start with")
 	flags.String("metrics-port", ":8787", "specify where to serve the /metrics and /status endpoint. /metrics serve the prometheus metrics for WPA")
 	flags.Float64("k8s-api-qps", 5.0, "qps indicates the maximum QPS to the k8s api from the clients(wpa).")
 	flags.Int("k8s-api-burst", 10, "maximum burst for throttle between requests from clients(wpa) to k8s api")
@@ -112,9 +108,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	kubeConfigPath := v.Viper.GetString("kube-config")
 	sqsShortPollInterval := v.Viper.GetInt("sqs-short-poll-interval")
 	sqsLongPollInterval := v.Viper.GetInt("sqs-long-poll-interval")
-	beanstalkShortPollInterval := v.Viper.GetInt(
-		"beanstalk-short-poll-interval")
-	beanstalkLongPollInterval := v.Viper.GetInt("beanstalk-long-poll-interval")
 	queueServicesToStartWith := v.Viper.GetString("queue-services")
 	metricsPort := v.Viper.GetString("metrics-port")
 	k8sApiQPS := float32(v.Viper.GetFloat64("k8s-api-qps"))
@@ -166,15 +159,6 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 			}
 
 			queuingServices = append(queuingServices, sqs)
-		case queue.BeanstalkQueueService:
-			bs, err := queue.NewBeanstalk(
-				queue.BeanstalkQueueService,
-				queues, beanstalkShortPollInterval, beanstalkLongPollInterval)
-			if err != nil {
-				klog.Fatalf("Error creating bs Poller: %v", err)
-			}
-
-			queuingServices = append(queuingServices, bs)
 		default:
 			klog.Fatal("Unsupported queue provider: ", q)
 		}
