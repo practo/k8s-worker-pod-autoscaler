@@ -22,7 +22,6 @@ type WorkerPodAutoScalerMultiQueueSpec struct {
 	MaxReplicas    *int32  `json:"maxReplicas"`
 	MaxDisruption  *string `json:"maxDisruption,omitempty"`
 	DeploymentName string  `json:"deploymentName,omitempty"`
-	ReplicaSetName string  `json:"replicaSetName,omitempty"`
 	Queues         []Queue `json:"queues,omitempty"`
 }
 

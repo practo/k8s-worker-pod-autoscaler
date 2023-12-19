@@ -195,7 +195,7 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 		ctx, kubeClient, customClient,
 		kubeInformerFactory.Apps().V1().Deployments(),
 		kubeInformerFactory.Apps().V1().ReplicaSets(),
-		customInformerFactory.K8s().V1().WorkerPodCustomAutoScalers(),
+		customInformerFactory.K8s().V1().WorkerPodAutoScalerMultiQueues(),
 		wpaDefaultMaxDisruption,
 		resyncPeriod,
 		scaleDownDelay,
