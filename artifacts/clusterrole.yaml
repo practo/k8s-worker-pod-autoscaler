@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: workerpodautoscaler
+  name: workerpodautoscalermultiqueue
 rules:
 - apiGroups:
   - apiextensions.k8s.io
@@ -12,8 +12,8 @@ rules:
 - apiGroups:
   - k8s.practo.dev
   resources:
-  - workerpodautoscalers
-  - workerpodautoscalers/status
+  - workerpodautoscalermultiqueues
+  - workerpodautoscalermultiqueues/status
   verbs:
   - list
   - update
@@ -32,7 +32,6 @@ rules:
   - apps
   resources:
   - deployments
-  - replicasets
   verbs:
   - get
   - list

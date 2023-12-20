@@ -19,14 +19,14 @@ limitations under the License.
 package v1
 
 import (
-	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscalermultiqueue/v1"
 	"github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
 type K8sV1Interface interface {
 	RESTClient() rest.Interface
-	WorkerPodAutoScalersGetter
+	WorkerPodAutoScalerMultiQueuesGetter
 }
 
 // K8sV1Client is used to interact with features provided by the k8s.practo.dev group.
@@ -34,8 +34,8 @@ type K8sV1Client struct {
 	restClient rest.Interface
 }
 
-func (c *K8sV1Client) WorkerPodAutoScalers(namespace string) WorkerPodAutoScalerInterface {
-	return newWorkerPodAutoScalers(c, namespace)
+func (c *K8sV1Client) WorkerPodAutoScalerMultiQueues(namespace string) WorkerPodAutoScalerMultiQueueInterface {
+	return newWorkerPodAutoScalerMultiQueues(c, namespace)
 }
 
 // NewForConfig creates a new K8sV1Client for the given config.

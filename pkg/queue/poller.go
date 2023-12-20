@@ -40,7 +40,7 @@ func (p *Poller) runPollThread(key string) {
 			return
 		}
 		queueSpec := p.queues.ListQueue(key)
-		if queueSpec.name == "" {
+		if queueSpec.Name == "" {
 			return
 		}
 		p.queueService.poll(key, queueSpec)

@@ -1,19 +1,19 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: workerpodautoscaler
+  name: workerpodautoscalermultiqueue
   labels:
-    k8s-app: workerpodautoscaler
+    k8s-app: workerpodautoscalermultiqueue
   namespace: monitoring
 spec:
   jobLabel: k8s-app
   selector:
     matchLabels:
-      k8s-app: workerpodautoscaler
+      k8s-app: workerpodautoscalermultiqueue
   namespaceSelector:
     matchNames:
     - kube-system
   endpoints:
-  - port: workerpodautoscaler-metrics
+  - port: workerpodautoscalermultiqueue-metrics
     path: /metrics
     interval: 5s

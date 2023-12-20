@@ -24,29 +24,29 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 
-	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscaler/v1"
+	v1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/apis/workerpodautoscalermultiqueue/v1"
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	samplescheme "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/scheme"
-	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscaler/v1"
-	listers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscaler/v1"
+	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions/workerpodautoscalermultiqueue/v1"
+	listers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/listers/workerpodautoscalermultiqueue/v1"
 	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
 )
 
-const controllerAgentName = "workerpodautoscaler-controller"
+const controllerAgentName = "workerpodcustomautoscaler-controller"
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a WorkerPodAutoScaler is synced
+	// SuccessSynced is used as part of the Event 'reason' when a WorkerPodAutoScalerMultiQueue is synced
 	SuccessSynced = "Synced"
-	// ErrResourceExists is used as part of the Event 'reason' when a WorkerPodAutoScaler fails
+	// ErrResourceExists is used as part of the Event 'reason' when a WorkerPodAutoScalerMultiQueue fails
 	// to sync due to a Deployment of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
 
 	// MessageResourceExists is the message used for Events when a resource
 	// fails to sync due to a Deployment already existing
-	MessageResourceExists = "Resource %q already exists and is not managed by WorkerPodAutoScaler"
-	// MessageResourceSynced is the message used for an Event fired when a WorkerPodAutoScaler
+	MessageResourceExists = "Resource %q already exists and is not managed by WorkerPodAutoScalerMultiQueue"
+	// MessageResourceSynced is the message used for an Event fired when a WorkerPodAutoScalerMultiQueue
 	// is synced successfully
-	MessageResourceSynced = "WorkerPodAutoScaler synced successfully"
+	MessageResourceSynced = "WorkerPodAutoScalerMultiQueue synced successfully"
 
 	// WokerPodAutoScalerEventAdd stores the add event name
 	WokerPodAutoScalerEventAdd = "add"
@@ -66,7 +66,7 @@ var (
 			Name:      "loop_duration_seconds",
 			Help:      "Number of seconds to complete the control loop successfully, partitioned by wpa name and namespace",
 		},
-		[]string{"workerpodautoscaler", "namespace"},
+		[]string{"workerpodcustomautoscaler", "namespace"},
 	)
 
 	loopCountSuccess = prometheus.NewCounterVec(
@@ -76,7 +76,7 @@ var (
 			Name:      "loop_count_success",
 			Help:      "How many times the control loop executed successfully, partitioned by wpa name and namespace",
 		},
-		[]string{"workerpodautoscaler", "namespace"},
+		[]string{"workerpodcustomautoscaler", "namespace"},
 	)
 
 	qMsgs = prometheus.NewGaugeVec(
@@ -86,7 +86,7 @@ var (
 			Name:      "messages",
 			Help:      "Number of unprocessed messages in the queue",
 		},
-		[]string{"workerpodautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
 	)
 
 	qMsgsSPM = prometheus.NewGaugeVec(
@@ -96,7 +96,7 @@ var (
 			Name:      "messages_sent_per_minute",
 			Help:      "Number of messages sent to the queue per minute",
 		},
-		[]string{"workerpodautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
 	)
 
 	workersIdle = prometheus.NewGaugeVec(
@@ -106,7 +106,7 @@ var (
 			Name:      "idle",
 			Help:      "Number of idle workers",
 		},
-		[]string{"workerpodautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
 	)
 
 	workersCurrent = prometheus.NewGaugeVec(
@@ -116,7 +116,7 @@ var (
 			Name:      "current",
 			Help:      "Number of current workers",
 		},
-		[]string{"workerpodautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
 	)
 
 	workersDesired = prometheus.NewGaugeVec(
@@ -126,7 +126,7 @@ var (
 			Name:      "desired",
 			Help:      "Number of desired workers",
 		},
-		[]string{"workerpodautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
 	)
 
 	workersAvailable = prometheus.NewGaugeVec(
@@ -136,7 +136,7 @@ var (
 			Name:      "available",
 			Help:      "Number of available workers",
 		},
-		[]string{"workerpodautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
 	)
 )
 
@@ -156,7 +156,7 @@ type WokerPodAutoScalerEvent struct {
 	name string
 }
 
-// Controller is the controller implementation for WorkerPodAutoScaler resources
+// Controller is the controller implementation for WorkerPodAutoScalerMultiQueue resources
 type Controller struct {
 	ctx context.Context
 
@@ -168,7 +168,7 @@ type Controller struct {
 	deploymentsSynced          cache.InformerSynced
 	replicaSetLister           appslisters.ReplicaSetLister
 	replicaSetsSynced          cache.InformerSynced
-	workerPodAutoScalersLister listers.WorkerPodAutoScalerLister
+	workerPodAutoScalersLister listers.WorkerPodAutoScalerMultiQueueLister
 	workerPodAutoScalersSynced cache.InformerSynced
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
@@ -202,7 +202,7 @@ func NewController(
 	customclientset clientset.Interface,
 	deploymentInformer appsinformers.DeploymentInformer,
 	replicaSetInformer appsinformers.ReplicaSetInformer,
-	workerPodAutoScalerInformer informers.WorkerPodAutoScalerInformer,
+	workerPodAutoScalerInformer informers.WorkerPodAutoScalerMultiQueueInformer,
 	defaultMaxDisruption string,
 	resyncPeriod time.Duration,
 	scaleDownDelay time.Duration,
@@ -237,7 +237,7 @@ func NewController(
 
 	klog.V(4).Info("Setting up event handlers")
 
-	// Set up an event handler for when WorkerPodAutoScaler resources change
+	// Set up an event handler for when WorkerPodAutoScalerMultiQueue resources change
 	workerPodAutoScalerInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueAddWorkerPodAutoScaler,
 		UpdateFunc: func(old, new interface{}) {
@@ -257,7 +257,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	klog.V(1).Info("Starting WorkerPodAutoScaler controller")
+	klog.V(1).Info("Starting WorkerPodAutoScalerMultiQueue controller")
 
 	// Wait for the caches to be synced before starting workers
 	klog.V(1).Info("Waiting for informer caches to sync")
@@ -266,7 +266,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	klog.V(1).Info("Starting workers")
-	// Launch two workers to process WorkerPodAutoScaler resources
+	// Launch two workers to process WorkerPodAutoScalerMultiQueue resources
 	for i := 0; i < threadiness; i++ {
 		// TOOD: move from stopCh to context, use: UntilWithContext()
 		go wait.Until(c.runWorker, time.Second, stopCh)
@@ -320,7 +320,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// WorkerPodAutoScaler resource to be synced.
+		// WorkerPodAutoScalerMultiQueue resource to be synced.
 		if err := c.syncHandler(ctx, event); err != nil {
 			// Put the item back on the workqueue to handle any transient errors.
 			c.workqueue.AddRateLimited(event)
@@ -341,7 +341,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the WorkerPodAutoScaler resource
+// converge the two. It then updates the Status block of the WorkerPodAutoScalerMultiQueue resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEvent) error {
 	now := time.Now()
@@ -353,13 +353,13 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		return nil
 	}
 
-	// Get the WorkerPodAutoScaler resource with this namespace/name
-	workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalers(namespace).Get(name)
+	// Get the WorkerPodAutoScalerMultiQueue resource with this namespace/name
+	workerPodAutoScaler, err := c.workerPodAutoScalersLister.WorkerPodAutoScalerMultiQueues(namespace).Get(name)
 	if err != nil {
-		// The WorkerPodAutoScaler resource may no longer exist, in which case we stop processing.
+		// The WorkerPodAutoScalerMultiQueue resource may no longer exist, in which case we stop processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("workerPodAutoScaler '%s' in work queue no longer exists", key))
-			c.Queues.Delete(namespace, name)
+			c.Queues.Delete(namespace, name, "")
 			return nil
 		}
 		return err
@@ -367,9 +367,8 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 
 	var currentWorkers, availableWorkers int32
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
-	replicaSetName := workerPodAutoScaler.Spec.ReplicaSetName
 	if deploymentName != "" {
-		// Get the Deployment with the name specified in WorkerPodAutoScaler.spec
+		// Get the Deployment with the name specified in WorkerPodAutoScalerMultiQueue.spec
 		deployment, err := c.deploymentLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("deployment %s not found in namespace %s",
@@ -379,17 +378,6 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		}
 		currentWorkers = *deployment.Spec.Replicas
 		availableWorkers = deployment.Status.AvailableReplicas
-	} else if replicaSetName != "" {
-		// Get the ReplicaSet with the name specified in WorkerPodAutoScaler.spec
-		replicaSet, err := c.replicaSetLister.ReplicaSets(workerPodAutoScaler.Namespace).Get(replicaSetName)
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("ReplicaSet %s not found in namespace %s",
-				replicaSetName, workerPodAutoScaler.Namespace)
-		} else if err != nil {
-			return err
-		}
-		currentWorkers = *replicaSet.Spec.Replicas
-		availableWorkers = replicaSet.Status.AvailableReplicas
 	} else {
 		// We choose to absorb the error here as the worker would requeue the
 		// resource otherwise. Instead, the next time the resource is updated
@@ -398,103 +386,63 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		return nil
 	}
 
-	var secondsToProcessOneJob float64
-	if workerPodAutoScaler.Spec.SecondsToProcessOneJob != nil {
-		secondsToProcessOneJob = *workerPodAutoScaler.Spec.SecondsToProcessOneJob
-	}
-
 	switch event.name {
 	case WokerPodAutoScalerEventAdd:
-		err = c.Queues.Add(
-			namespace,
-			name,
-			workerPodAutoScaler.Spec.QueueURI,
-			currentWorkers,
-			secondsToProcessOneJob,
-		)
+		for _, q := range workerPodAutoScaler.Spec.Queues {
+			err = c.Queues.Add(
+				namespace,
+				name,
+				q.URI,
+				currentWorkers,
+				q.SecondsToProcessOneJob,
+			)
+		}
 	case WokerPodAutoScalerEventUpdate:
-		err = c.Queues.Add(
-			namespace,
-			name,
-			workerPodAutoScaler.Spec.QueueURI,
-			currentWorkers,
-			secondsToProcessOneJob,
-		)
+		for _, q := range workerPodAutoScaler.Spec.Queues {
+			err = c.Queues.Add(
+				namespace,
+				name,
+				q.URI,
+				currentWorkers,
+				q.SecondsToProcessOneJob,
+			)
+		}
 	case WokerPodAutoScalerEventDelete:
-		err = c.Queues.Delete(namespace, name)
+		for _, q := range workerPodAutoScaler.Spec.Queues {
+			qName := queue.GetQueueName(q.URI)
+			err = c.Queues.Delete(namespace, name, qName)
+		}
 	}
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to sync queue: %s", err.Error()))
 		return err
 	}
 
-	queueName, queueMessages, messagesSentPerMinute, idleWorkers := c.Queues.GetQueueInfo(
-		namespace, name)
-	if queueName == "" {
-		return nil
+	qSpecs := c.Queues.ListMultiQueues(key)
+	for _, qSpec := range qSpecs {
+		if qSpec.Messages == queue.UnsyncedQueueMessageCount {
+			klog.Warningf(
+				"%s qMsgs: %d, q not initialized, waiting for init to complete",
+				qSpec.Name,
+				qSpec.Messages,
+			)
+			return nil
+		}
 	}
 
-	if queueMessages == queue.UnsyncedQueueMessageCount {
-		klog.Warningf(
-			"%s qMsgs: %d, q not initialized, waiting for init to complete",
-			queueName,
-			queueMessages,
-		)
-		return nil
-	}
-
-	desiredWorkers := GetDesiredWorkers(
-		queueName,
-		queueMessages,
-		messagesSentPerMinute,
-		secondsToProcessOneJob,
-		*workerPodAutoScaler.Spec.TargetMessagesPerWorker,
+	desiredWorkers, totalQueueMessages := GetDesiredWorkersMultiQueue(
+		deploymentName,
+		qSpecs,
+		workerPodAutoScaler.Spec.Queues,
 		currentWorkers,
-		idleWorkers,
 		*workerPodAutoScaler.Spec.MinReplicas,
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
-	klog.V(2).Infof("%s current: %d", queueName, currentWorkers)
-	klog.V(2).Infof("%s qMsgs: %d, desired: %d",
-		queueName, queueMessages, desiredWorkers)
-
-	// set metrics
-	qMsgs.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(queueMessages))
-	qMsgsSPM.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(messagesSentPerMinute)
-	workersIdle.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(idleWorkers))
-	workersCurrent.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(currentWorkers))
-	workersDesired.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(desiredWorkers))
-	workersAvailable.WithLabelValues(
-		name,
-		namespace,
-		queueName,
-	).Set(float64(availableWorkers))
-
 	lastScaleTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
 
 	op := GetScaleOperation(
-		queueName,
+		deploymentName,
 		desiredWorkers,
 		currentWorkers,
 		lastScaleTime,
@@ -506,19 +454,15 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 			c.updateDeployment(
 				ctx,
 				workerPodAutoScaler.Namespace, deploymentName, &desiredWorkers)
-		} else {
-			c.updateReplicaSet(
-				ctx,
-				workerPodAutoScaler.Namespace, replicaSetName, &desiredWorkers)
 		}
 
 		now := metav1.Now()
 		lastScaleTime = &now
 	}
 
-	klog.V(2).Infof("%s scaleOp: %v", queueName, scaleOpString(op))
+	klog.V(2).Infof("%s scaleOp: %v", deploymentName, scaleOpString(op))
 
-	// Finally, we update the status block of the WorkerPodAutoScaler resource to reflect the
+	// Finally, we update the status block of the WorkerPodAutoScalerMultiQueue resource to reflect the
 	// current state of the world
 	updateWorkerPodAutoScalerStatus(
 		ctx,
@@ -529,7 +473,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		workerPodAutoScaler,
 		currentWorkers,
 		availableWorkers,
-		queueMessages,
+		totalQueueMessages,
 		lastScaleTime,
 	)
 
@@ -636,6 +580,26 @@ func getMinWorkers(
 	klog.V(4).Infof("%v, workersBasedOnMessagesSent=%v\n", secondsToProcessOneJob, workersBasedOnMessagesSent)
 	if workersBasedOnMessagesSent > minWorkers {
 		return workersBasedOnMessagesSent
+	}
+	return minWorkers
+}
+
+// getMinMultiQueueWorkers gets the min workers based on the
+// velocity metric: messagesSentPerMinute
+func getMinMultiQueueWorkers(
+	deploymentName string,
+	queueSpecs map[string]queue.QueueSpec,
+	minWorkers int32) int32 {
+	var totalMinWorkers int32
+	for _, qSpec := range queueSpecs {
+		workersBasedOnMessagesSent := int32(math.Ceil((qSpec.SecondsToProcessOneJob * qSpec.MessagesSentPerMinute) / 60))
+		klog.V(4).Infof("%s: secondsToProcessOneJob=%v, workersBasedOnMessagesSent=%v\n", qSpec.Name, qSpec.SecondsToProcessOneJob, workersBasedOnMessagesSent)
+		totalMinWorkers += workersBasedOnMessagesSent
+	}
+	klog.V(4).Infof("%s: totalWorkersBasedOnMessagesSent=%v\n", deploymentName, totalMinWorkers)
+
+	if totalMinWorkers > minWorkers {
+		return totalMinWorkers
 	}
 	return minWorkers
 }
@@ -759,6 +723,118 @@ func GetDesiredWorkers(
 	)
 }
 
+// GetDesiredWorkersMultiQueue finds the desired number of workers which are required
+func GetDesiredWorkersMultiQueue(
+	deploymentName string,
+	queueSpecs map[string]queue.QueueSpec,
+	k8QueueSpecs []v1.Queue,
+	currentWorkers int32,
+	minWorkers int32,
+	maxWorkers int32,
+	maxDisruption *string) (int32, int32) {
+	for _, k8QSpec := range k8QueueSpecs {
+		qSpec := queueSpecs[k8QSpec.URI]
+		klog.V(4).Infof("%s min=%v, max=%v, targetBacklog=%v \n",
+			qSpec.Name, minWorkers, maxWorkers, k8QSpec.TargetMessagesPerWorker)
+	}
+
+	totalQueueMessages, totalMessagesSentPerMinute, idleWorkers := queue.Aggregate(queueSpecs)
+
+	// overwrite the minimum workers needed based on
+	// messagesSentPerMinute and secondsToProcessOneJob
+	// this feature is disabled if secondsToProcessOneJob is not set or is 0.0
+	minWorkers = getMinMultiQueueWorkers(
+		deploymentName,
+		queueSpecs,
+		minWorkers,
+	)
+
+	// gets the maximum number of workers that can be scaled down in a
+	// single scale down activity.
+	maxDisruptableWorkers := getMaxDisruptableWorkers(
+		maxDisruption, currentWorkers,
+	)
+
+	tolerance := 0.1
+	var desiredWorkers int32
+	for _, k8QSpec := range k8QueueSpecs {
+		qSpec := queueSpecs[k8QSpec.URI]
+		desiredWorkers += int32(math.Ceil(
+			float64(qSpec.Messages) / float64(k8QSpec.TargetMessagesPerWorker)),
+		)
+	}
+	klog.V(4).Infof("MinWorkers: %v, MaxWorkers: %v, DesiredWorkers: %v, CurrentWorkers: %v, idleWorkers=%v\n", minWorkers, maxWorkers, desiredWorkers, currentWorkers, idleWorkers)
+
+	if currentWorkers == 0 {
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		), totalQueueMessages
+	}
+
+	if totalQueueMessages > 0 {
+		if isChangeTooSmall(desiredWorkers, currentWorkers, tolerance) {
+			// desired is same as current in this scenario
+			return convertDesiredReplicasWithRules(
+				currentWorkers,
+				currentWorkers,
+				minWorkers,
+				maxWorkers,
+				maxDisruptableWorkers,
+			), totalQueueMessages
+		}
+
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		), totalQueueMessages
+	} else if totalMessagesSentPerMinute > 0 {
+		// this is the case in which there is no backlog visible.
+		// (mostly because the workers picks up jobs very quickly)
+		// But the queue has throughput, so we return the minWorkers.
+		// Note: minWorkers is updated based on
+		// messagesSentPerMinute and secondsToProcessOneJob
+		// desried is the minReplicas in this scenario
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			minWorkers,
+			minWorkers,
+			maxWorkers,
+			maxDisruptableWorkers,
+		), totalQueueMessages
+	}
+
+	// Attempt for massive scale down
+	if currentWorkers == idleWorkers {
+		desiredWorkers := int32(0)
+		// for massive scale down to happen maxDisruptableWorkers
+		// should be ignored
+		return convertDesiredReplicasWithRules(
+			currentWorkers,
+			desiredWorkers,
+			minWorkers,
+			maxWorkers,
+			currentWorkers,
+		), totalQueueMessages
+	}
+
+	// Attempt partial scale down since there is no backlog or in-processing
+	// messages.
+	return convertDesiredReplicasWithRules(
+		currentWorkers,
+		minWorkers,
+		minWorkers,
+		maxWorkers,
+		maxDisruptableWorkers,
+	), totalQueueMessages
+}
+
 func convertDesiredReplicasWithRules(
 	current int32,
 	desired int32,
@@ -789,17 +865,17 @@ func updateWorkerPodAutoScalerStatus(
 	namespace string,
 	customclientset clientset.Interface,
 	desiredWorkers int32,
-	workerPodAutoScaler *v1.WorkerPodAutoScaler,
+	workerPodAutoScalerMultiQueue *v1.WorkerPodAutoScalerMultiQueue,
 	currentWorkers int32,
 	availableWorkers int32,
 	queueMessages int32,
 	lastScaleTime *metav1.Time) {
 
-	if workerPodAutoScaler.Status.CurrentReplicas == currentWorkers &&
-		workerPodAutoScaler.Status.AvailableReplicas == availableWorkers &&
-		workerPodAutoScaler.Status.DesiredReplicas == desiredWorkers &&
-		workerPodAutoScaler.Status.CurrentMessages == queueMessages &&
-		workerPodAutoScaler.Status.LastScaleTime.Equal(lastScaleTime) {
+	if workerPodAutoScalerMultiQueue.Status.CurrentReplicas == currentWorkers &&
+		workerPodAutoScalerMultiQueue.Status.AvailableReplicas == availableWorkers &&
+		workerPodAutoScalerMultiQueue.Status.DesiredReplicas == desiredWorkers &&
+		workerPodAutoScalerMultiQueue.Status.CurrentMessages == queueMessages &&
+		workerPodAutoScalerMultiQueue.Status.LastScaleTime.Equal(lastScaleTime) {
 		klog.V(4).Infof("%s/%s: WPA status is already up to date\n", namespace, name)
 		return
 	} else {
@@ -809,17 +885,17 @@ func updateWorkerPodAutoScalerStatus(
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
-	workerPodAutoScalerCopy := workerPodAutoScaler.DeepCopy()
-	workerPodAutoScalerCopy.Status.CurrentReplicas = currentWorkers
-	workerPodAutoScalerCopy.Status.AvailableReplicas = availableWorkers
-	workerPodAutoScalerCopy.Status.DesiredReplicas = desiredWorkers
-	workerPodAutoScalerCopy.Status.CurrentMessages = queueMessages
-	workerPodAutoScalerCopy.Status.LastScaleTime = lastScaleTime
+	workerPodAutoScalerMultiQueueCopy := workerPodAutoScalerMultiQueue.DeepCopy()
+	workerPodAutoScalerMultiQueueCopy.Status.CurrentReplicas = currentWorkers
+	workerPodAutoScalerMultiQueueCopy.Status.AvailableReplicas = availableWorkers
+	workerPodAutoScalerMultiQueueCopy.Status.DesiredReplicas = desiredWorkers
+	workerPodAutoScalerMultiQueueCopy.Status.CurrentMessages = queueMessages
+	workerPodAutoScalerMultiQueueCopy.Status.LastScaleTime = lastScaleTime
 	// If the CustomResourceSubresources feature gate is not enabled,
-	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScaler resource.
+	// we must use Update instead of UpdateStatus to update the Status block of the WorkerPodAutoScalerMultiQueue resource.
 	// UpdateStatus will not allow changes to the Spec of the resource,
 	// which is ideal for ensuring nothing other than resource status has been updated.
-	_, err := customclientset.K8sV1().WorkerPodAutoScalers(workerPodAutoScaler.Namespace).UpdateStatus(ctx, workerPodAutoScalerCopy, metav1.UpdateOptions{})
+	_, err := customclientset.K8sV1().WorkerPodAutoScalerMultiQueues(workerPodAutoScalerMultiQueue.Namespace).UpdateStatus(ctx, workerPodAutoScalerMultiQueueCopy, metav1.UpdateOptions{})
 	if err != nil {
 		klog.Errorf("Error updating wpa status, err: %v", err)
 		return
@@ -827,9 +903,9 @@ func updateWorkerPodAutoScalerStatus(
 	klog.V(4).Infof("%s/%s: Updated wpa status\n", namespace, name)
 }
 
-// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScaler resource and converts it into a namespace/name
+// getKeyForWorkerPodAutoScaler takes a WorkerPodAutoScalerMultiQueue resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than WorkerPodAutoScaler.
+// passed resources of any type other than WorkerPodAutoScalerMultiQueue.
 func (c *Controller) getKeyForWorkerPodAutoScaler(obj interface{}) string {
 	var key string
 	var err error

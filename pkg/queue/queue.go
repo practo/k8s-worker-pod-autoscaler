@@ -34,7 +34,7 @@ type Queues struct {
 
 // QueueSpec is the specification for a single queue
 type QueueSpec struct {
-	name             string
+	Name             string
 	namespace        string
 	uri              string
 	host             string
@@ -43,13 +43,13 @@ type QueueSpec struct {
 	// messages is the total number of messages in the queue that are either
 	// not picked up or is not completely processed by the worker
 	// SQS: ApproximateNumberOfMessagesVisible + ApproximateNumberOfMessagesNotVisible
-	messages int32
+	Messages int32
 	// messagesSent is the number of messages sent to the queue per minute
 	// SQS: NumberOfMessagesSent metric
 	// this will help in calculating the desired replicas.
 	// It is most useful for workers which process very fast and
 	// always has a messages = 0  in the queue
-	messagesSentPerMinute float64
+	MessagesSentPerMinute float64
 	// idleWorkers tells the number of workers which are idle
 	// and not doing any processing.
 	idleWorkers int32
@@ -57,7 +57,7 @@ type QueueSpec struct {
 
 	// secondsToProcessOneJob tells the time to process
 	// one job by one worker process
-	secondsToProcessOneJob float64
+	SecondsToProcessOneJob float64
 }
 
 func NewQueues() *Queues {
@@ -104,7 +104,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 					continue
 				}
 				var spec = q.item[key]
-				spec.messages = value
+				spec.Messages = value
 				q.item[key] = spec
 			}
 			doneQueueSync()
@@ -114,7 +114,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 					continue
 				}
 				var spec = q.item[key]
-				spec.messagesSentPerMinute = value
+				spec.MessagesSentPerMinute = value
 				q.item[key] = spec
 			}
 			doneQueueSync()
@@ -152,13 +152,13 @@ func (q *Queues) Add(namespace string, name string, uri string,
 		return nil
 	}
 
-	key := getKey(namespace, name)
-	queueName := getQueueName(uri)
+	queueName := GetQueueName(uri)
 	protocol, host, err := parseQueueURI(uri)
 	if err != nil {
 		return err
 	}
 
+	key := getMultiQueueKey(namespace, name, queueName)
 	supported, queueServiceName, err := getQueueServiceName(host, protocol)
 	if !supported {
 		klog.Warningf(
@@ -169,33 +169,33 @@ func (q *Queues) Add(namespace string, name string, uri string,
 	messages := int32(UnsyncedQueueMessageCount)
 	idleWorkers := int32(UnsyncedIdleWorkers)
 	messagesSent := float64(UnsyncedMessagesSentPerMinute)
-	spec := q.listQueueByNamespace(namespace, name)
-	if spec.name != "" {
-		messages = spec.messages
-		messagesSent = spec.messagesSentPerMinute
+	spec := q.listQueueByNamespace(namespace, name, queueName)
+	if spec.Name != "" {
+		messages = spec.Messages
+		messagesSent = spec.MessagesSentPerMinute
 		idleWorkers = spec.idleWorkers
 	}
 
 	queueSpec := QueueSpec{
-		name:                   queueName,
+		Name:                   queueName,
 		namespace:              namespace,
 		uri:                    uri,
 		protocol:               protocol,
 		host:                   host,
 		queueServiceName:       queueServiceName,
-		messages:               messages,
-		messagesSentPerMinute:  messagesSent,
+		Messages:               messages,
+		MessagesSentPerMinute:  messagesSent,
 		workers:                workers,
 		idleWorkers:            idleWorkers,
-		secondsToProcessOneJob: secondsToProcessOneJob,
+		SecondsToProcessOneJob: secondsToProcessOneJob,
 	}
 
 	q.addCh <- map[string]QueueSpec{key: queueSpec}
 	return nil
 }
 
-func (q *Queues) Delete(namespace string, name string) error {
-	q.deleteCh <- getKey(namespace, name)
+func (q *Queues) Delete(namespace string, name string, queueName string) error {
+	q.deleteCh <- getMultiQueueKey(namespace, name, queueName)
 	return nil
 }
 
@@ -224,20 +224,33 @@ func (q *Queues) ListQueue(key string) QueueSpec {
 	return item[key]
 }
 
-func (q *Queues) listQueueByNamespace(namespace string, name string) QueueSpec {
-	return q.ListQueue(getKey(namespace, name))
+// ListMultiQueues fetches all queue specs with the given key prefix and returns
+// a map of queue uri to queue spec
+func (q *Queues) ListMultiQueues(key string) map[string]QueueSpec {
+	items := q.ListAll()
+	specs := make(map[string]QueueSpec)
+	for k, v := range items {
+		if strings.HasPrefix(k, key) {
+			specs[v.uri] = v
+		}
+	}
+	return specs
+}
+
+func (q *Queues) listQueueByNamespace(namespace string, name string, queueName string) QueueSpec {
+	return q.ListQueue(getMultiQueueKey(namespace, name, queueName))
 }
 
 func (q *Queues) GetQueueInfo(
-	namespace string, name string) (string, int32, float64, int32) {
+	namespace string, name string, qName string) (string, int32, float64, int32) {
 
-	spec := q.listQueueByNamespace(namespace, name)
-	if spec.name == "" {
+	spec := q.listQueueByNamespace(namespace, name, qName)
+	if spec.Name == "" {
 		return "", 0, 0.0, 0
 	}
 
-	return spec.name, spec.messages,
-		spec.messagesSentPerMinute, spec.idleWorkers
+	return spec.Name, spec.Messages,
+		spec.MessagesSentPerMinute, spec.idleWorkers
 }
 
 func parseQueueURI(uri string) (string, string, error) {
@@ -249,13 +262,13 @@ func parseQueueURI(uri string) (string, string, error) {
 	return parsedURI.Scheme, parsedURI.Host, nil
 }
 
-func getQueueName(name string) string {
+func GetQueueName(name string) string {
 	splitted := strings.Split(name, "/")
 	return splitted[len(splitted)-1]
 }
 
-func getKey(namespace string, name string) string {
-	return namespace + "/" + name
+func getMultiQueueKey(namespace string, name string, queueName string) string {
+	return strings.Join([]string{namespace, name, queueName}, "/")
 }
 
 func DeepCopyItem(original map[string]QueueSpec) map[string]QueueSpec {
@@ -264,4 +277,18 @@ func DeepCopyItem(original map[string]QueueSpec) map[string]QueueSpec {
 		copy[key] = value
 	}
 	return copy
+}
+
+func Aggregate(qSpecs map[string]QueueSpec) (int32, float64, int32) {
+	var totalMessages int32
+	var totalMessagesSentPerMinute float64
+	idleWorkers := int32(UnsyncedIdleWorkers)
+	for _, qSpec := range qSpecs {
+		totalMessages += qSpec.Messages
+		totalMessagesSentPerMinute += qSpec.MessagesSentPerMinute
+		if idleWorkers < qSpec.idleWorkers {
+			idleWorkers = qSpec.idleWorkers
+		}
+	}
+	return totalMessages, totalMessagesSentPerMinute, idleWorkers
 }

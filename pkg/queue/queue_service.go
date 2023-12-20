@@ -8,8 +8,7 @@ import (
 // For example: SQS and Beanstalk implements QueuingService interface
 
 const (
-	SqsQueueService       = "sqs"
-	BeanstalkQueueService = "beanstalkd"
+	SqsQueueService = "sqs"
 )
 
 type QueuingService interface {
@@ -35,10 +34,6 @@ func getQueueServiceName(host, protocol string) (bool, string, error) {
 
 	if matched {
 		return true, SqsQueueService, nil
-	}
-
-	if protocol == BenanstalkProtocol {
-		return true, BeanstalkQueueService, nil
 	}
 
 	return false, "", nil

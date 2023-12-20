@@ -20,8 +20,8 @@ package fake
 
 import (
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
-	k8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1"
-	fakek8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscaler/v1/fake"
+	k8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscalermultiqueue/v1"
+	fakek8sv1 "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned/typed/workerpodautoscalermultiqueue/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
