@@ -1,6 +1,6 @@
 # The binary to build (just the basename).
 # This can be overwritten from command line using
-BIN := workerpodautoscaler
+BIN := workerpodautoscalermultiqueue
 
 UNIQUE:=$(shell date +%s)
 
