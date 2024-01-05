@@ -224,7 +224,7 @@ git pull origin master
 ```
 git fetch --tags
 git tag v1.6.0
-make push
+GOOS=linux GOARCH=amd64 REGISTRY="" make push
 ```
 Note: For every tag major and major minor versions tags also available. For example: `v1` and `v1.6`
 
