@@ -118,7 +118,14 @@ func (s *SQS) longPollReceiveMessage(queueURI string) (int32, error) {
 }
 
 func (s *SQS) getApproxMessages(queueURI string) (int32, error) {
-	result, err := s.getSQSClient(queueURI).GetQueueAttributes(&sqs.GetQueueAttributesInput{
+
+	sqsClient = s.getSQSClient(queueURI)
+
+	if sqsClient == nil {
+		return 0, fmt.Errorf("failed to get SQS client, QUEUE URI: %s", queueURI)
+	}
+
+	result, err := sqsClient.GetQueueAttributes(&sqs.GetQueueAttributesInput{
 		QueueUrl:       &queueURI,
 		AttributeNames: []*string{aws.String("ApproximateNumberOfMessages")},
 	})
