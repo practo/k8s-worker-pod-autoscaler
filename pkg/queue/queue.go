@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"math"
 	"net/url"
 	"strings"
 
@@ -282,13 +283,19 @@ func DeepCopyItem(original map[string]QueueSpec) map[string]QueueSpec {
 func Aggregate(qSpecs map[string]QueueSpec) (int32, float64, int32) {
 	var totalMessages int32
 	var totalMessagesSentPerMinute float64
-	idleWorkers := int32(UnsyncedIdleWorkers)
 	for _, qSpec := range qSpecs {
 		totalMessages += qSpec.Messages
 		totalMessagesSentPerMinute += qSpec.MessagesSentPerMinute
-		if idleWorkers < qSpec.idleWorkers {
+	}
+
+	idleWorkers := int32(math.MaxInt32)
+	for _, qSpec := range qSpecs {
+		if qSpec.idleWorkers == UnsyncedIdleWorkers {
+			return totalMessages, totalMessagesSentPerMinute, UnsyncedIdleWorkers
+		} else if qSpec.idleWorkers < idleWorkers {
 			idleWorkers = qSpec.idleWorkers
 		}
 	}
+
 	return totalMessages, totalMessagesSentPerMinute, idleWorkers
 }
