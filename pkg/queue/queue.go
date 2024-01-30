@@ -281,8 +281,13 @@ func DeepCopyItem(original map[string]QueueSpec) map[string]QueueSpec {
 }
 
 func Aggregate(qSpecs map[string]QueueSpec) (int32, float64, int32) {
-	var totalMessages int32
-	var totalMessagesSentPerMinute float64
+	totalMessages := int32(0)
+	totalMessagesSentPerMinute := float64(0)
+
+	if len(qSpecs) == 0 {
+		return totalMessages, totalMessagesSentPerMinute, UnsyncedIdleWorkers
+	}
+
 	for _, qSpec := range qSpecs {
 		totalMessages += qSpec.Messages
 		totalMessagesSentPerMinute += qSpec.MessagesSentPerMinute
