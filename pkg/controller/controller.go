@@ -116,7 +116,7 @@ var (
 			Name:      "current",
 			Help:      "Number of current workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 
 	workersDesired = prometheus.NewGaugeVec(
@@ -126,7 +126,7 @@ var (
 			Name:      "desired",
 			Help:      "Number of desired workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 
 	workersAvailable = prometheus.NewGaugeVec(
@@ -136,7 +136,7 @@ var (
 			Name:      "available",
 			Help:      "Number of available workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 )
 
@@ -439,6 +439,41 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
+	// set metrics
+	for _, qSpec := range qSpecs {
+		qMsgs.WithLabelValues(
+			name,
+			namespace,
+			qSpec.Name,
+		).Set(float64(qSpec.Messages))
+		qMsgsSPM.WithLabelValues(
+			name,
+			namespace,
+			qSpec.Name,
+		).Set(qSpec.MessagesSentPerMinute)
+		workersIdle.WithLabelValues(
+			name,
+			namespace,
+			qSpec.Name,
+		).Set(float64(qSpec.IdleWorkers))
+	}
+
+	workersCurrent.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(currentWorkers))
+	workersDesired.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(desiredWorkers))
+	workersAvailable.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(availableWorkers))
+
 	lastScaleTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
 
 	op := GetScaleOperation(

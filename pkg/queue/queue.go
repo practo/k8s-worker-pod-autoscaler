@@ -53,7 +53,7 @@ type QueueSpec struct {
 	MessagesSentPerMinute float64
 	// idleWorkers tells the number of workers which are idle
 	// and not doing any processing.
-	idleWorkers int32
+	IdleWorkers int32
 	workers     int32
 
 	// secondsToProcessOneJob tells the time to process
@@ -125,7 +125,7 @@ func (q *Queues) Sync(stopCh <-chan struct{}) {
 					continue
 				}
 				var spec = q.item[key]
-				spec.idleWorkers = value
+				spec.IdleWorkers = value
 				q.item[key] = spec
 			}
 			doneQueueSync()
@@ -174,7 +174,7 @@ func (q *Queues) Add(namespace string, name string, uri string,
 	if spec.Name != "" {
 		messages = spec.Messages
 		messagesSent = spec.MessagesSentPerMinute
-		idleWorkers = spec.idleWorkers
+		idleWorkers = spec.IdleWorkers
 	}
 
 	queueSpec := QueueSpec{
@@ -187,7 +187,7 @@ func (q *Queues) Add(namespace string, name string, uri string,
 		Messages:               messages,
 		MessagesSentPerMinute:  messagesSent,
 		workers:                workers,
-		idleWorkers:            idleWorkers,
+		IdleWorkers:            idleWorkers,
 		SecondsToProcessOneJob: secondsToProcessOneJob,
 	}
 
@@ -251,7 +251,7 @@ func (q *Queues) GetQueueInfo(
 	}
 
 	return spec.Name, spec.Messages,
-		spec.MessagesSentPerMinute, spec.idleWorkers
+		spec.MessagesSentPerMinute, spec.IdleWorkers
 }
 
 func parseQueueURI(uri string) (string, string, error) {
@@ -295,10 +295,10 @@ func Aggregate(qSpecs map[string]QueueSpec) (int32, float64, int32) {
 
 	idleWorkers := int32(math.MaxInt32)
 	for _, qSpec := range qSpecs {
-		if qSpec.idleWorkers == UnsyncedIdleWorkers {
+		if qSpec.IdleWorkers == UnsyncedIdleWorkers {
 			return totalMessages, totalMessagesSentPerMinute, UnsyncedIdleWorkers
-		} else if qSpec.idleWorkers < idleWorkers {
-			idleWorkers = qSpec.idleWorkers
+		} else if qSpec.IdleWorkers < idleWorkers {
+			idleWorkers = qSpec.IdleWorkers
 		}
 	}
 
