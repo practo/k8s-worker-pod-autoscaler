@@ -106,7 +106,7 @@ var (
 			Name:      "idle",
 			Help:      "Number of idle workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 
 	workersCurrent = prometheus.NewGaugeVec(
@@ -430,7 +430,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		}
 	}
 
-	desiredWorkers, totalQueueMessages := GetDesiredWorkersMultiQueue(
+	desiredWorkers, totalQueueMessages, idleWorkers := GetDesiredWorkersMultiQueue(
 		deploymentName,
 		qSpecs,
 		workerPodAutoScaler.Spec.Queues,
@@ -451,13 +451,12 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 			namespace,
 			qSpec.Name,
 		).Set(qSpec.MessagesSentPerMinute)
-		workersIdle.WithLabelValues(
-			name,
-			namespace,
-			qSpec.Name,
-		).Set(float64(qSpec.IdleWorkers))
 	}
-
+	workersIdle.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(idleWorkers))
 	workersCurrent.WithLabelValues(
 		name,
 		namespace,
@@ -766,7 +765,7 @@ func GetDesiredWorkersMultiQueue(
 	currentWorkers int32,
 	minWorkers int32,
 	maxWorkers int32,
-	maxDisruption *string) (int32, int32) {
+	maxDisruption *string) (int32, int32, int32) {
 	for _, k8QSpec := range k8QueueSpecs {
 		qSpec := queueSpecs[k8QSpec.URI]
 		klog.V(4).Infof("%s min=%v, max=%v, targetBacklog=%v \n",
@@ -807,7 +806,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	}
 
 	if totalQueueMessages > 0 {
@@ -819,7 +818,7 @@ func GetDesiredWorkersMultiQueue(
 				minWorkers,
 				maxWorkers,
 				maxDisruptableWorkers,
-			), totalQueueMessages
+			), totalQueueMessages, idleWorkers
 		}
 
 		return convertDesiredReplicasWithRules(
@@ -828,7 +827,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	} else if totalMessagesSentPerMinute > 0 {
 		// this is the case in which there is no backlog visible.
 		// (mostly because the workers picks up jobs very quickly)
@@ -842,7 +841,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	}
 
 	// Attempt for massive scale down
@@ -856,7 +855,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			currentWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	}
 
 	// Attempt partial scale down since there is no backlog or in-processing
@@ -867,7 +866,7 @@ func GetDesiredWorkersMultiQueue(
 		minWorkers,
 		maxWorkers,
 		maxDisruptableWorkers,
-	), totalQueueMessages
+	), totalQueueMessages, idleWorkers
 }
 
 func convertDesiredReplicasWithRules(
