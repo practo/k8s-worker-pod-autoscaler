@@ -106,7 +106,7 @@ var (
 			Name:      "idle",
 			Help:      "Number of idle workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 
 	workersCurrent = prometheus.NewGaugeVec(
@@ -116,7 +116,7 @@ var (
 			Name:      "current",
 			Help:      "Number of current workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 
 	workersDesired = prometheus.NewGaugeVec(
@@ -126,7 +126,7 @@ var (
 			Name:      "desired",
 			Help:      "Number of desired workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 
 	workersAvailable = prometheus.NewGaugeVec(
@@ -136,7 +136,7 @@ var (
 			Name:      "available",
 			Help:      "Number of available workers",
 		},
-		[]string{"workerpodcustomautoscaler", "namespace", "queueName"},
+		[]string{"workerpodcustomautoscaler", "namespace", "deploymentName"},
 	)
 )
 
@@ -430,7 +430,7 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		}
 	}
 
-	desiredWorkers, totalQueueMessages := GetDesiredWorkersMultiQueue(
+	desiredWorkers, totalQueueMessages, idleWorkers := GetDesiredWorkersMultiQueue(
 		deploymentName,
 		qSpecs,
 		workerPodAutoScaler.Spec.Queues,
@@ -439,6 +439,40 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		*workerPodAutoScaler.Spec.MaxReplicas,
 		workerPodAutoScaler.GetMaxDisruption(c.defaultMaxDisruption),
 	)
+	// set metrics
+	for _, qSpec := range qSpecs {
+		qMsgs.WithLabelValues(
+			name,
+			namespace,
+			qSpec.Name,
+		).Set(float64(qSpec.Messages))
+		qMsgsSPM.WithLabelValues(
+			name,
+			namespace,
+			qSpec.Name,
+		).Set(qSpec.MessagesSentPerMinute)
+	}
+	workersIdle.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(idleWorkers))
+	workersCurrent.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(currentWorkers))
+	workersDesired.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(desiredWorkers))
+	workersAvailable.WithLabelValues(
+		name,
+		namespace,
+		deploymentName,
+	).Set(float64(availableWorkers))
+
 	lastScaleTime := workerPodAutoScaler.Status.LastScaleTime.DeepCopy()
 
 	op := GetScaleOperation(
@@ -731,7 +765,7 @@ func GetDesiredWorkersMultiQueue(
 	currentWorkers int32,
 	minWorkers int32,
 	maxWorkers int32,
-	maxDisruption *string) (int32, int32) {
+	maxDisruption *string) (int32, int32, int32) {
 	for _, k8QSpec := range k8QueueSpecs {
 		qSpec := queueSpecs[k8QSpec.URI]
 		klog.V(4).Infof("%s min=%v, max=%v, targetBacklog=%v \n",
@@ -772,7 +806,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	}
 
 	if totalQueueMessages > 0 {
@@ -784,7 +818,7 @@ func GetDesiredWorkersMultiQueue(
 				minWorkers,
 				maxWorkers,
 				maxDisruptableWorkers,
-			), totalQueueMessages
+			), totalQueueMessages, idleWorkers
 		}
 
 		return convertDesiredReplicasWithRules(
@@ -793,7 +827,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	} else if totalMessagesSentPerMinute > 0 {
 		// this is the case in which there is no backlog visible.
 		// (mostly because the workers picks up jobs very quickly)
@@ -807,7 +841,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			maxDisruptableWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	}
 
 	// Attempt for massive scale down
@@ -821,7 +855,7 @@ func GetDesiredWorkersMultiQueue(
 			minWorkers,
 			maxWorkers,
 			currentWorkers,
-		), totalQueueMessages
+		), totalQueueMessages, idleWorkers
 	}
 
 	// Attempt partial scale down since there is no backlog or in-processing
@@ -832,7 +866,7 @@ func GetDesiredWorkersMultiQueue(
 		minWorkers,
 		maxWorkers,
 		maxDisruptableWorkers,
-	), totalQueueMessages
+	), totalQueueMessages, idleWorkers
 }
 
 func convertDesiredReplicasWithRules(
