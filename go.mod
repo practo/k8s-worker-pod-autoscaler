@@ -4,8 +4,6 @@ go 1.17
 
 require (
 	github.com/aws/aws-sdk-go v1.40.46
-	github.com/beanstalkd/go-beanstalk v0.1.0
-	github.com/golang/mock v1.6.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/practo/klog/v2 v2.2.1
 	github.com/practo/promlog v1.0.0
@@ -13,6 +11,7 @@ require (
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
+	github.com/statsig-io/go-sdk v1.1.1
 	k8s.io/api v0.21.4
 	k8s.io/apimachinery v0.21.4
 	k8s.io/client-go v0.21.4
@@ -59,7 +58,9 @@ require (
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
+	github.com/statsig-io/ip3country-go v0.2.0 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
+	github.com/ua-parser/uap-go v0.0.0-20211112212520-00c877edfe0f // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f // indirect

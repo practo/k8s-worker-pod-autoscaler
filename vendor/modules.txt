@@ -48,9 +48,6 @@ github.com/aws/aws-sdk-go/service/sso
 github.com/aws/aws-sdk-go/service/sso/ssoiface
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
-# github.com/beanstalkd/go-beanstalk v0.1.0
-## explicit; go 1.14
-github.com/beanstalkd/go-beanstalk
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
@@ -89,9 +86,6 @@ github.com/gogo/protobuf/sortkeys
 # github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 ## explicit
 github.com/golang/groupcache/lru
-# github.com/golang/mock v1.6.0
-## explicit; go 1.11
-github.com/golang/mock/gomock
 # github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
 github.com/golang/protobuf/proto
@@ -223,9 +217,18 @@ github.com/spf13/viper/internal/encoding/hcl
 github.com/spf13/viper/internal/encoding/json
 github.com/spf13/viper/internal/encoding/toml
 github.com/spf13/viper/internal/encoding/yaml
+# github.com/statsig-io/go-sdk v1.1.1
+## explicit; go 1.16
+github.com/statsig-io/go-sdk
+# github.com/statsig-io/ip3country-go v0.2.0
+## explicit; go 1.16
+github.com/statsig-io/ip3country-go/pkg/countrylookup
 # github.com/subosito/gotenv v1.2.0
 ## explicit
 github.com/subosito/gotenv
+# github.com/ua-parser/uap-go v0.0.0-20211112212520-00c877edfe0f
+## explicit
+github.com/ua-parser/uap-go/uaparser
 # golang.org/x/mod v0.4.2
 ## explicit; go 1.12
 golang.org/x/mod/module
