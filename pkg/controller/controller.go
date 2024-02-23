@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/practo/klog/v2"
@@ -196,6 +197,7 @@ type Controller struct {
 	scaleDownDelay time.Duration
 
 	Queues *queue.Queues
+	env    string
 }
 
 // NewController returns a new sample controller
@@ -209,7 +211,8 @@ func NewController(
 	defaultMaxDisruption string,
 	resyncPeriod time.Duration,
 	scaleDownDelay time.Duration,
-	queues *queue.Queues) *Controller {
+	queues *queue.Queues,
+	env string) *Controller {
 
 	// Create event broadcaster
 	// Add sample-controller types to the default Kubernetes Scheme so Events can be
@@ -236,6 +239,7 @@ func NewController(
 		defaultMaxDisruption:       defaultMaxDisruption,
 		scaleDownDelay:             scaleDownDelay,
 		Queues:                     queues,
+		env:                        env,
 	}
 
 	klog.V(4).Info("Setting up event handlers")
@@ -371,6 +375,10 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 	var currentWorkers, availableWorkers int32
 	deploymentName := workerPodAutoScaler.Spec.DeploymentName
 	if deploymentName != "" {
+		if !strings.Contains(deploymentName, c.env) {
+			utilruntime.HandleError(fmt.Errorf("event ignored as deployment=%s does not match env=%s", key, c.env))
+			return nil
+		}
 		// Get the Deployment with the name specified in WorkerPodAutoScalerMultiQueue.spec
 		deployment, err := c.deploymentLister.Deployments(workerPodAutoScaler.Namespace).Get(deploymentName)
 		if errors.IsNotFound(err) {

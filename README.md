@@ -142,6 +142,7 @@ Flags:
       --sqs-short-poll-interval int                      the duration (in seconds) after which the next sqs api call is made to fetch the queue length (default 20)
       --wpa-default-max-disruption string                it is the default value for the maxDisruption in the WPA spec. This specifies how much percentage of pods can be disrupted in a single scale down acitivity. Can be expressed as integers or as a percentage. (default "100%")
       --wpa-threads int                                  wpa threadiness, number of threads to process wpa resources (default 10)
+      --environment                                      restrict wpa to scale deployment names that contain environment name (default development)
 
 Global Flags:
   -v, --v Level   number for the log level verbosity

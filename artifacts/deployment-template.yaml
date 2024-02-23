@@ -42,6 +42,7 @@ spec:
          - --k8s-api-burst=10
          - --wpa-default-max-disruption=100%
          - --queue-services=sqs
+         - --environment=development
          - -v=2
        resources:
          limits:
