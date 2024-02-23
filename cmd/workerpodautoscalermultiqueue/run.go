@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	statsig "github.com/statsig-io/go-sdk"
 	"net/http"
 	"os"
 	"strings"
@@ -24,7 +25,6 @@ import (
 	clientset "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/clientset/versioned"
 	informers "github.com/practo/k8s-worker-pod-autoscaler/pkg/generated/informers/externalversions"
 	queue "github.com/practo/k8s-worker-pod-autoscaler/pkg/queue"
-	statsig "github.com/statsig-io/go-sdk"
 )
 
 type runCmd struct {
@@ -99,7 +99,6 @@ func parseRegions(regionNames string) []string {
 }
 
 func (v *runCmd) run(cmd *cobra.Command, args []string) {
-	statsig.InitializeWithOptions(v.Viper.GetString("STATSIG_SDK_KEY"), &statsig.Options{Environment: statsig.Environment{Tier: "staging"}})
 	scaleDownDelay := time.Second * time.Duration(
 		v.Viper.GetInt("scale-down-delay-after-last-scale-activity"),
 	)
@@ -118,6 +117,9 @@ func (v *runCmd) run(cmd *cobra.Command, args []string) {
 	k8sApiBurst := v.Viper.GetInt("k8s-api-burst")
 	namespace := v.Viper.GetString("namespace")
 	env := v.Viper.GetString("environment")
+
+	klog.Infof("Initializing Statsig a feature flagging solution for environment %s", env)
+	statsig.InitializeWithOptions(v.Viper.GetString("STATSIG_SDK_KEY"), &statsig.Options{Environment: statsig.Environment{Tier: env}})
 
 	hook := promlog.MustNewPrometheusHook("wpa_", klog.WarningSeverityLevel)
 	klog.AddHook(hook)

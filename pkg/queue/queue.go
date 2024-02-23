@@ -1,11 +1,14 @@
 package queue
 
 import (
+	"github.com/pkg/errors"
 	"math"
 	"net/url"
 	"strings"
 
 	"github.com/practo/klog/v2"
+
+	statsig "github.com/statsig-io/go-sdk"
 )
 
 var (
@@ -19,6 +22,8 @@ const (
 	UnsyncedQueueMessageCount     = -1
 	UnsyncedMessagesSentPerMinute = -1
 	UnsyncedIdleWorkers           = -1
+	// PausedQueuesDynamicConfig is the name of statsig dynamic config for paused queues
+	PausedQueuesDynamicConfig = "platform-shoryuken-paused-queues"
 )
 
 // Queues maintains a list of all queues as specified in WPAs in memory
@@ -236,6 +241,24 @@ func (q *Queues) ListMultiQueues(key string) map[string]QueueSpec {
 		}
 	}
 	return specs
+}
+
+// ListActiveMultiQueues fetches all active queue specs with the given key prefix
+// and returns a map of queue uri to queue spec
+func (q *Queues) ListActiveMultiQueues(key string) (map[string]QueueSpec, error) {
+	config := statsig.GetConfig(statsig.User{UserID: key}, PausedQueuesDynamicConfig)
+	items := q.ListAll()
+	specs := make(map[string]QueueSpec)
+	for k, v := range items {
+		queueName := GetQueueName(v.uri)
+		if !config.GetBool(queueName, false) && strings.HasPrefix(k, key) && v.Messages > 0 {
+			specs[v.uri] = v
+		}
+	}
+	if len(specs) == 0 {
+		return nil, errors.Errorf("No active queues found for key: %s. Please check the dynamic config in statsig console %s", key, PausedQueuesDynamicConfig)
+	}
+	return specs, nil
 }
 
 func (q *Queues) listQueueByNamespace(namespace string, name string, queueName string) QueueSpec {

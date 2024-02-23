@@ -57,9 +57,6 @@ const (
 
 	// WokerPodAutoScalerEventDelete stores the add event name
 	WokerPodAutoScalerEventDelete = "delete"
-
-	// PausedQueuesDynamicConfigName is the name of statsig dynamic config for paused queues
-	PausedQueuesDynamicConfigName = "platform-shoryuken-paused-queues"
 )
 
 var (
@@ -429,7 +426,12 @@ func (c *Controller) syncHandler(ctx context.Context, event WokerPodAutoScalerEv
 		return err
 	}
 
-	qSpecs := c.Queues.ListMultiQueues(key)
+	qSpecs, err := c.Queues.ListActiveMultiQueues(key)
+	if err != nil {
+		klog.Warning(err.Error())
+		return nil
+	}
+
 	for _, qSpec := range qSpecs {
 		if qSpec.Messages == queue.UnsyncedQueueMessageCount {
 			klog.Warningf(
