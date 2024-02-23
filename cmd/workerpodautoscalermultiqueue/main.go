@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	klog.InitFlags(nil)
 	cobra.OnInitialize(func() {
-		cmdutil.CheckErr(cmdutil.InitConfig("workerpodautoscaler"))
+		cmdutil.CheckErr(cmdutil.InitConfig("workerpodautoscalermultiqueue"))
 	})
 
 	rootCmd.PersistentFlags()
